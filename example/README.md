@@ -47,12 +47,16 @@ Boots `todo_server` as its own OS process, then runs the client demo against it:
 
 ## Regenerate the client resources
 
+Both steps are wired as mix aliases (see each `mix.exs`) so the workflow is
+self-documenting:
+
 ```sh
-# publish the manifest from the server
-cd todo_server && mix run -e 'File.write!("../todo_mob/priv/manifest.json", TodoServer.Rpc.Manifest.to_json())'
-# regenerate
-cd ../todo_mob && mix ash_remote.gen --manifest priv/manifest.json --namespace TodoMob.Remote --output lib
+cd todo_server && mix manifest.publish   # writes ../todo_mob/priv/manifest.json
+cd ../todo_mob  && mix remote.gen        # ash_remote.gen → lib/todo_mob/remote/*
 ```
+
+- `todo_server`'s `manifest.publish` → `TodoServer.Rpc.Manifest.to_json/0` written to the client's `priv/`.
+- `todo_mob`'s `remote.gen` → `mix ash_remote.gen --manifest priv/manifest.json --namespace TodoMob.Remote --output lib`.
 
 ## Running as a real mob app (device / emulator)
 

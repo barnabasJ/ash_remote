@@ -7,7 +7,17 @@ defmodule TodoMob.MixProject do
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
+      aliases: aliases(),
       deps: deps()
+    ]
+  end
+
+  defp aliases do
+    [
+      # Generate the standalone client resources from the published manifest.
+      "remote.gen": [
+        "ash_remote.gen --manifest priv/manifest.json --namespace TodoMob.Remote --output lib --yes"
+      ]
     ]
   end
 

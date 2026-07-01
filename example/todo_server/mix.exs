@@ -7,8 +7,24 @@ defmodule TodoServer.MixProject do
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
+      aliases: aliases(),
       deps: deps()
     ]
+  end
+
+  @manifest_path "../todo_mob/priv/manifest.json"
+
+  defp aliases do
+    [
+      # Publish the RPC manifest (the contract artifact) into the client's priv/.
+      "manifest.publish": &publish_manifest/1
+    ]
+  end
+
+  defp publish_manifest(_args) do
+    Mix.Task.run("compile")
+    File.write!(@manifest_path, TodoServer.Rpc.Manifest.to_json())
+    Mix.shell().info("wrote #{@manifest_path}")
   end
 
   def application do
