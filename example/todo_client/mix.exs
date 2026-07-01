@@ -1,9 +1,9 @@
-defmodule TodoMob.MixProject do
+defmodule TodoClient.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :todo_mob,
+      app: :todo_client,
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
@@ -16,7 +16,7 @@ defmodule TodoMob.MixProject do
     [
       # Generate the standalone client resources from the published manifest.
       "remote.gen": [
-        "ash_remote.gen --manifest priv/manifest.json --namespace TodoMob.Remote --output lib --yes"
+        "ash_remote.gen --manifest priv/manifest.json --namespace TodoClient.Remote --output lib --yes"
       ]
     ]
   end
@@ -24,7 +24,7 @@ defmodule TodoMob.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {TodoMob.Application, []}
+      mod: {TodoClient.Application, []}
     ]
   end
 
@@ -39,14 +39,14 @@ defmodule TodoMob.MixProject do
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},
 
+      # A small, viewable LiveView UI over the generated resources.
+      {:phoenix, "~> 1.8"},
+      {:phoenix_live_view, "~> 1.0"},
+      {:bandit, "~> 1.5"},
+
       # The backend, only for the in-BEAM end-to-end test (starts its RPC router
       # via Bandit on localhost). Not needed to build or ship the client.
       {:todo_server, path: "../todo_server", only: :test, runtime: false}
-
-      # In a real app, replace the in-repo `Mob` shim (lib/mob/) with the real
-      # framework and deploy to a device/emulator:
-      #   {:mob, "~> 0.7"}
-      # then: mix mob.install && mix mob.deploy --native
     ]
   end
 end

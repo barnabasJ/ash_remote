@@ -1,6 +1,6 @@
-defmodule TodoMob.Remote.User do
+defmodule TodoClient.Remote.User do
   use Ash.Resource,
-    domain: TodoMob.Remote.Domain,
+    domain: TodoClient.Remote.Domain,
     data_layer: AshRemote.DataLayer,
     extensions: [AshRemote.Resource]
 
@@ -10,7 +10,7 @@ defmodule TodoMob.Remote.User do
     managed_attributes([:id, :name])
     managed_relationships([:todos])
     managed_calculations([])
-    managed_actions([:create, :destroy, :read, :update])
+    managed_actions([:create, :read])
   end
 
   attributes do
@@ -19,7 +19,7 @@ defmodule TodoMob.Remote.User do
   end
 
   relationships do
-    has_many(:todos, TodoMob.Remote.Todo, public?: true)
+    has_many(:todos, TodoClient.Remote.Todo, public?: true)
   end
 
   actions do
@@ -28,19 +28,8 @@ defmodule TodoMob.Remote.User do
       accept([:name])
     end
 
-    destroy :destroy do
-      primary?(true)
-      require_atomic?(false)
-    end
-
     read :read do
       primary?(true)
-    end
-
-    update :update do
-      primary?(true)
-      require_atomic?(false)
-      accept([:name])
     end
   end
 end

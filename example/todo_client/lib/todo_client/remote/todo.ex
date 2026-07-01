@@ -1,6 +1,6 @@
-defmodule TodoMob.Remote.Todo do
+defmodule TodoClient.Remote.Todo do
   use Ash.Resource,
-    domain: TodoMob.Remote.Domain,
+    domain: TodoClient.Remote.Domain,
     data_layer: AshRemote.DataLayer,
     extensions: [AshRemote.Resource]
 
@@ -18,12 +18,12 @@ defmodule TodoMob.Remote.Todo do
     attribute(:due_date, :date, public?: true)
     uuid_primary_key(:id)
     attribute(:inserted_at, :utc_datetime_usec, public?: true)
-    attribute(:priority, TodoMob.Remote.Priority, public?: true)
+    attribute(:priority, TodoClient.Remote.Priority, public?: true)
     attribute(:title, :string, public?: true, allow_nil?: false)
   end
 
   relationships do
-    belongs_to(:user, TodoMob.Remote.User, public?: true, attribute_writable?: true)
+    belongs_to(:user, TodoClient.Remote.User, public?: true, attribute_writable?: true)
   end
 
   calculations do

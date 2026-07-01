@@ -12,7 +12,7 @@ defmodule TodoServer.MixProject do
     ]
   end
 
-  @manifest_path "../todo_mob/priv/manifest.json"
+  @manifest_path "../todo_client/priv/manifest.json"
 
   defp aliases do
     [

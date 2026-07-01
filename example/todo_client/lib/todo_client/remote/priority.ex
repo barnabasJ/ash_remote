@@ -1,3 +1,3 @@
-defmodule TodoMob.Remote.Priority do
+defmodule TodoClient.Remote.Priority do
   use Ash.Type.Enum, values: [:low, :medium, :high]
 end

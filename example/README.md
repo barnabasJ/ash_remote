@@ -1,81 +1,91 @@
-# ash_remote example — todo server + mob client
+# ash_remote example — todo server + LiveView client
 
 A two-project monorepo showing `ash_remote` end to end:
 
 ```
 example/
-  todo_server/   Ash backend. Exposes todos over the RPC protocol and publishes
-                 a JSON Ash.Info.Manifest at /manifest.json.
-  todo_mob/      A `mob` (BEAM-on-device) client. Consumes the manifest, generates
-                 standalone Ash resources with `mix ash_remote.gen`, and manages
-                 todos from a mob screen using AshPhoenix.Form — every read/write
-                 is an RPC call to todo_server via AshRemote.DataLayer.
+  todo_server/   Ash backend. Declares its RPC-exposed surface with the
+                 `AshRemote.Rpc` DSL, mounts `AshRemote.Server.Router`, and
+                 publishes a JSON Ash.Info.Manifest at /manifest.json.
+  todo_client/   A LiveView app. Consumes the manifest, generates standalone Ash
+                 resources with `mix ash_remote.gen`, and manages todos from a
+                 LiveView using AshPhoenix.Form — every read/write is an RPC call
+                 to todo_server via AshRemote.DataLayer.
 ```
 
 ## The flow
 
 ```
-todo_server ──/manifest.json──►  mix ash_remote.gen  ──►  TodoMob.Remote.{Todo,User,Priority}
+todo_server ──/manifest.json──►  mix ash_remote.gen  ──►  TodoClient.Remote.{Todo,User,Priority}
      ▲                                                              │
-     └──────── /rpc/run ◄──── AshRemote.DataLayer ◄──── TodoMob.TodoListScreen (AshPhoenix.Form)
+     └──────── /rpc/run ◄──── AshRemote.DataLayer ◄──── TodoClient.Live (AshPhoenix.Form)
 ```
 
-The mob screen calls `Ash.read!/1`, `AshPhoenix.Form.submit/2`, `Ash.update/3`,
+The LiveView calls `Ash.read!/1`, `AshPhoenix.Form.submit/2`, `Ash.update/3`,
 `Ash.destroy!/1` on the **generated** resources exactly as if they were local —
 `AshRemote.DataLayer` turns each into an HTTP RPC call to `todo_server`.
 
-## Run the automated end-to-end (no device needed)
+## Exposing actions (server)
 
-`todo_mob`'s test boots the backend's RPC router in-process and drives the mob
-screen headlessly (mount → create → toggle → delete), asserting each change made
-a real round trip to the server:
+The backend declares what's exposed, ash_typescript-style:
 
-```sh
-cd todo_mob && HEX_OFFLINE=1 mix test
+```elixir
+# todo_server/lib/todo_server/domain.ex
+use Ash.Domain, extensions: [AshRemote.Rpc]
+
+rpc do
+  resource TodoServer.Todo do
+    expose :read
+    expose :create
+    expose :update
+    expose :destroy
+  end
+
+  resource TodoServer.User do
+    expose :read
+    expose :create
+  end
+end
 ```
 
-## Run the two-process demo
+and mounts the built-in router (no custom RPC code):
 
-Boots `todo_server` as its own OS process, then runs the client demo against it:
-
-```sh
-./e2e.sh
+```elixir
+# todo_server/lib/todo_server/rpc_router.ex
+use AshRemote.Server.Router, otp_app: :todo_server
 ```
 
-(or manually: `cd todo_server && mix run --no-halt` in one shell, then
-`cd todo_mob && mix run -e "TodoMob.Demo.run()"` in another.)
+## Look at it (browser)
+
+Two shells:
+
+```sh
+# 1) the backend (http://localhost:4010, manifest at /manifest.json)
+cd example/todo_server && mix run --no-halt
+
+# 2) the LiveView client — then open http://localhost:4001
+cd example/todo_client && mix run --no-halt -e "TodoClient.Web.start()"
+```
+
+## Automated end-to-end test (no browser needed)
+
+`todo_client`'s test boots the backend's RPC router in-process and drives the
+LiveView (mount → create → toggle → delete), asserting each change round-tripped
+to the server:
+
+```sh
+cd example/todo_client && HEX_OFFLINE=1 mix test
+```
 
 ## Regenerate the client resources
 
-Both steps are wired as mix aliases (see each `mix.exs`) so the workflow is
-self-documenting:
+Both steps are wired as mix aliases (see each `mix.exs`):
 
 ```sh
-cd todo_server && mix manifest.publish   # writes ../todo_mob/priv/manifest.json
-cd ../todo_mob  && mix remote.gen        # ash_remote.gen → lib/todo_mob/remote/*
+cd todo_server && mix manifest.publish   # writes ../todo_client/priv/manifest.json
+cd ../todo_client && mix remote.gen      # ash_remote.gen → lib/todo_client/remote/*
 ```
 
-- `todo_server`'s `manifest.publish` → `TodoServer.Rpc.Manifest.to_json/0` written to the client's `priv/`.
-- `todo_mob`'s `remote.gen` → `mix ash_remote.gen --manifest priv/manifest.json --namespace TodoMob.Remote --output lib`.
-
-## Running as a real mob app (device / emulator)
-
-`mob` renders native SwiftUI / Jetpack Compose — there is no browser target, so a
-real UI needs an iOS simulator or Android emulator. This example ships a small
-in-repo `Mob` shim (`todo_mob/lib/mob/`) faithful to mob's `Mob.Screen` API so the
-integration runs headlessly here. To run on a device, swap the shim for the real
-framework — the screen code in `todo_mob/lib/todo_mob/` is unchanged:
-
-```elixir
-# todo_mob/mix.exs — remove lib/mob/ and add:
-{:mob, "~> 0.7"}
-```
-
-```sh
-mix mob.install
-mix mob.deploy --native   # build + install to the simulator/emulator
-```
-
-> Note: these projects use local path deps to the sibling `ash` and `ash_remote`
+> These projects use local path deps to the sibling `ash` and `ash_remote`
 > checkouts (`ash_remote`'s `Ash.Info.Manifest` is unreleased). In this sandbox,
 > fetch deps with `HEX_OFFLINE=1 mix deps.get`.
