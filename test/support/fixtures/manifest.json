@@ -73,17 +73,6 @@
     {
       "action": {
         "get": false,
-        "inputs": [],
-        "metadata": [],
-        "name": "complete",
-        "primary": false,
-        "type": "update"
-      },
-      "resource": "AshRemote.Backend.Todo"
-    },
-    {
-      "action": {
-        "get": false,
         "inputs": [
           {
             "allow_nil": false,

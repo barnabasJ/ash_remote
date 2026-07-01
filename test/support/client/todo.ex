@@ -46,19 +46,8 @@ defmodule AshRemote.Client.Todo do
     update :update do
       primary? true
       require_atomic? false
-      manual AshRemote.Manual.Update
     end
 
-    update :complete do
-      accept []
-      require_atomic? false
-      manual AshRemote.Manual.Update
-    end
-
-    destroy :destroy do
-      primary? true
-      require_atomic? false
-      manual AshRemote.Manual.Destroy
-    end
+    destroy :destroy, primary?: true
   end
 end

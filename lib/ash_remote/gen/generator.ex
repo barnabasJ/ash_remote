@@ -232,18 +232,16 @@ defmodule AshRemote.Gen do
     lines =
       compact_lines([
         primary?(action),
+        # Remote data layer can't do server-side atomic updates.
         "    require_atomic? false",
-        accept_line(action, res),
-        "    manual AshRemote.Manual.Update"
+        accept_line(action, res)
       ])
 
     "    update :#{action.name} do\n#{lines}\n    end"
   end
 
   defp action_block(%{type: :destroy} = action, _res) do
-    lines =
-      compact_lines([primary?(action), "    require_atomic? false", "    manual AshRemote.Manual.Destroy"])
-
+    lines = compact_lines([primary?(action), "    require_atomic? false"])
     "    destroy :#{action.name} do\n#{lines}\n    end"
   end
 

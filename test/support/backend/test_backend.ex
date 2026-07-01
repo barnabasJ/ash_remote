@@ -12,7 +12,7 @@ defmodule AshRemote.Backend.TestBackend do
 
   @doc "Start the backend server (idempotent — a second call is a no-op)."
   def start do
-    case Bandit.start_link(plug: AshRemote.Backend.Rpc.Router, port: @port, startup_log: false) do
+    case Bandit.start_link(plug: AshRemote.Backend.RpcRouter, port: @port, startup_log: false) do
       {:ok, pid} -> {:ok, pid}
       {:error, {:already_started, pid}} -> {:ok, pid}
       {:error, {:shutdown, {:failed_to_start_child, _, :eaddrinuse}}} -> {:ok, :already_listening}

@@ -122,24 +122,12 @@ defmodule AshRemote.DataLayer do
   end
 
   @impl true
-  def update(resource, changeset), do: remote_update(resource, changeset)
-
-  @impl true
-  def destroy(resource, changeset), do: remote_destroy(resource, changeset)
-
-  @doc """
-  Perform a remote update for a changeset and return `{:ok, record}`.
-
-  Generated update actions are `manual` and call this directly, so the round-trip
-  always happens (Ash would otherwise skip the data layer for a no-change
-  changeset, missing server-side effects like a `complete` action).
-  """
-  def remote_update(resource, changeset) do
+  def update(resource, changeset) do
     write(resource, changeset, changeset.action.name, input(changeset), primary_key(changeset))
   end
 
-  @doc "Perform a remote destroy for a changeset and return `{:ok, record}`."
-  def remote_destroy(resource, changeset) do
+  @impl true
+  def destroy(resource, changeset) do
     cfg = config(resource)
 
     body =
@@ -151,7 +139,7 @@ defmodule AshRemote.DataLayer do
 
     with {:ok, response} <- request(cfg, :run, body),
          {:ok, _data} <- Protocol.parse_run(response) do
-      {:ok, changeset.data}
+      :ok
     else
       {:error, errors} when is_list(errors) -> {:error, AshRemote.Error.to_ash_error(errors)}
       {:error, other} -> {:error, other}

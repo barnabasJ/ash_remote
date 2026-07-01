@@ -56,12 +56,12 @@ MyApp.Remote.Todo
 | `lib/ash_remote/error.ex` | wire errors → `Ash.Error.*` |
 | `lib/ash_remote/encode/` | `Ash.Query` → wire (fields, filter, sort, pagination) |
 | `lib/ash_remote/data_layer.ex` | `AshRemote.DataLayer` (implements `Ash.DataLayer`) |
-| `lib/ash_remote/manual/` | manual update/destroy (always round-trip to the server) |
 | `lib/ash_remote/resource.ex` | `AshRemote.Resource` extension (`remote do ... end`) |
 | `lib/ash_remote/manifest/` | manifest loader + normalized structs |
 | `lib/ash_remote/gen/` | manifest → resource source |
+| `lib/ash_remote/server.ex`, `server/` | server-side RPC core + `AshRemote.Server.Router` plug (ported from ash_typescript; mount it in a backend) |
 | `lib/mix/tasks/ash_remote.gen.ex` | the Igniter generator task |
-| `test/support/backend/` | a fresh reference backend (ported RPC core) for tests |
+| `test/support/backend/` | a reference backend that mounts `AshRemote.Server.Router` |
 
 ## Tests
 

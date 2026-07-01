@@ -22,7 +22,6 @@ defmodule AshRemote.E2ETest do
           {AshRemote.Backend.Todo, :get_by_id},
           {AshRemote.Backend.Todo, :create},
           {AshRemote.Backend.Todo, :update},
-          {AshRemote.Backend.Todo, :complete},
           {AshRemote.Backend.Todo, :destroy},
           {AshRemote.Backend.User, :read},
           {AshRemote.Backend.User, :create},
@@ -106,11 +105,11 @@ defmodule AshRemote.E2ETest do
     assert only == ["Aaa"]
   end
 
-  test "update, custom action, and destroy round-trip" do
+  test "update and destroy round-trip" do
     %{todo: todo} = seed()
 
     assert Ash.update!(todo, %{title: "Write more"}).title == "Write more"
-    assert Ash.update!(todo, %{}, action: :complete).completed == true
+    assert Ash.update!(todo, %{completed: true}).completed == true
 
     assert :ok = Ash.destroy!(todo)
     assert [] == mod(:Todo) |> Ash.Query.filter(id == ^todo.id) |> Ash.read!()

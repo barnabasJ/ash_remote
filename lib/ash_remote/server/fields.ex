@@ -1,32 +1,24 @@
-defmodule AshRemote.Backend.Rpc.Fields do
+defmodule AshRemote.Server.Fields do
   @moduledoc """
-  Ported (template) field-selection logic for the reference backend's RPC core.
+  Server-side field-selection logic for the RPC protocol.
 
-  Converts the wire `fields` selection (a nested list of names / single-key maps)
-  into an Ash `{select, load}` pair, and serializes result records back down to
-  exactly the requested selection.
+  Part of the ported (from `ash_typescript`) server core that lives in
+  `ash_remote` for now and would later be extracted into a shared protocol
+  package used by both `ash_typescript` and `ash_remote`.
 
-  Wire shapes:
-
-    * `"title"`                                    — attribute / scalar calc / aggregate
-    * `%{"user" => ["id", "name"]}`                — relationship with nested fields
-    * `%{"title_with_prefix" => %{"args" => %{"prefix" => "x"}}}` — calc with args
-    * `%{"comment_count" => []}`                   — aggregate (empty selection)
-
-  Written dependency-free (resource passed in) so it can be extracted into a
-  shared protocol package later.
+  Converts the wire `fields` selection into an Ash `{select, load}` pair and
+  serializes result records back down to exactly the requested selection.
   """
 
   alias Ash.Resource.Info
 
-  @doc "Convert a wire fields list into `{select, load}` for the given resource."
+  @doc "Convert a wire `fields` list into `{select, load}` for the resource."
   def to_select_and_load(resource, fields) when is_list(fields) do
     {select, load} =
       Enum.reduce(fields, {[], []}, fn field, {select, load} ->
         add_field(resource, field, select, load)
       end)
 
-    # Always select the primary key so records can be identified/decoded.
     pk = Info.primary_key(resource)
     {Enum.uniq(pk ++ Enum.reverse(select)), Enum.reverse(load)}
   end
@@ -47,11 +39,10 @@ defmodule AshRemote.Backend.Rpc.Fields do
         {select, [{name, rel_query} | load]}
 
       calculation?(resource, name) ->
-        args = spec |> args(spec) |> atomize_keys()
+        args = spec |> args() |> atomize_keys()
         {select, [{name, args} | load]}
 
       true ->
-        # aggregate with an empty selection, or unknown → treat as a load
         {select, [name | load]}
     end
   end
@@ -97,7 +88,6 @@ defmodule AshRemote.Backend.Rpc.Fields do
 
   defp loaded(%Ash.NotLoaded{}), do: nil
   defp loaded(other), do: other
-
   defp value(%Ash.NotLoaded{}), do: nil
   defp value(other), do: other
 
@@ -105,12 +95,11 @@ defmodule AshRemote.Backend.Rpc.Fields do
   defp subfields(%{"fields" => fields}), do: fields
   defp subfields(_), do: []
 
-  defp args(_spec, %{"args" => args}) when is_map(args), do: args
-  defp args(_spec, _), do: %{}
+  defp args(%{"args" => args}) when is_map(args), do: args
+  defp args(_), do: %{}
 
-  defp atomize_keys(map) do
-    Map.new(map, fn {k, v} -> {String.to_existing_atom(to_string(k)), v} end)
-  end
+  defp atomize_keys(map),
+    do: Map.new(map, fn {k, v} -> {String.to_existing_atom(to_string(k)), v} end)
 
   defp attribute?(resource, name), do: not is_nil(Info.attribute(resource, name))
   defp aggregate?(resource, name), do: not is_nil(Info.aggregate(resource, name))

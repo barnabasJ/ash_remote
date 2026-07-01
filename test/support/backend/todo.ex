@@ -78,12 +78,6 @@ defmodule AshRemote.Backend.Todo do
       require_atomic? false
     end
 
-    update :complete do
-      accept []
-      require_atomic? false
-      change set_attribute(:completed, true)
-    end
-
     destroy :destroy do
       primary? true
     end

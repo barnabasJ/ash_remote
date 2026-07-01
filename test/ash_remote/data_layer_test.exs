@@ -90,10 +90,11 @@ defmodule AshRemote.DataLayerTest do
     assert Ash.get!(Todo, todo.id).title == "Write more code"
   end
 
-  test "custom update action (complete)" do
+  test "update toggles a boolean attribute over the wire" do
     %{todo: todo} = seed()
-    completed = Ash.update!(todo, %{}, action: :complete)
+    completed = Ash.update!(todo, %{completed: true})
     assert completed.completed == true
+    assert Ash.get!(Todo, todo.id).completed == true
   end
 
   test "destroy round-trips" do

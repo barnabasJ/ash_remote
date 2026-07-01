@@ -49,7 +49,7 @@ defmodule AshRemote.Manifest.LoaderTest do
     names = todo.actions |> Enum.map(& &1.name) |> Enum.sort()
     assert "read" in names
     assert "create" in names
-    assert "complete" in names
+    assert "update" in names
 
     read = Enum.find(todo.actions, &(&1.name == "read"))
     assert read.type == :read
