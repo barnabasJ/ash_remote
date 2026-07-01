@@ -23,7 +23,12 @@ defmodule AshRemote.Gen do
     namespace = Keyword.fetch!(opts, :namespace)
     domain = opts[:domain] || namespace <> ".Domain"
 
-    modules = Map.keys(manifest.resources) ++ Map.keys(manifest.types)
+    # Drop builtin Ash types (e.g. Ash.Type.UtcDatetimeUsec from a timestamp) —
+    # only custom named types (enums, NewTypes) get their own generated module.
+    custom_types =
+      manifest.types |> Enum.reject(fn {module, _} -> builtin_type?(module) end) |> Map.new()
+
+    modules = Map.keys(manifest.resources) ++ Map.keys(custom_types)
     prefix = common_prefix(modules)
 
     ctx = %{
@@ -31,10 +36,11 @@ defmodule AshRemote.Gen do
       prefix: prefix,
       domain: domain,
       base_url: opts[:base_url],
-      manifest: manifest
+      manifest: manifest,
+      types: custom_types
     }
 
-    types = Enum.map(manifest.types, fn {_m, type} -> gen_type(type, ctx) end)
+    types = Enum.map(custom_types, fn {_m, type} -> gen_type(type, ctx) end)
     resources = Enum.map(manifest.resources, fn {_m, res} -> gen_resource(res, ctx) end)
 
     types ++ resources ++ [gen_domain(ctx)]
@@ -318,7 +324,11 @@ defmodule AshRemote.Gen do
   defp render_type(nil, _ctx), do: ":term"
 
   defp render_type(%{kind: :type_ref, module: module}, ctx) do
-    if Map.has_key?(ctx.manifest.types, module), do: client_module(module, ctx), else: ":map"
+    cond do
+      Map.has_key?(ctx.types, module) -> client_module(module, ctx)
+      builtin_type?(module) -> inspect(builtin_atom(module))
+      true -> ":map"
+    end
   end
 
   defp render_type(%{kind: :array, item_type: item}, ctx) do
@@ -336,6 +346,13 @@ defmodule AshRemote.Gen do
   defp ash_type(kind) when kind in @builtin, do: kind
   defp ash_type(:map), do: :map
   defp ash_type(_), do: :term
+
+  defp builtin_type?(module), do: String.starts_with?(module, "Ash.")
+
+  defp builtin_atom(module) do
+    atom = module |> String.split(".") |> List.last() |> Macro.underscore() |> String.to_atom()
+    if atom in @builtin, do: atom, else: :map
+  end
 
   # --- module naming -------------------------------------------------------
 
