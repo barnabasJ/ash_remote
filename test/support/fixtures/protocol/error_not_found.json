@@ -1,0 +1,17 @@
+{
+  "path": "/rpc/run",
+  "request": {
+    "action": "get_by_id",
+    "fields": [
+      "id"
+    ],
+    "primary_key": {
+      "id": "00000000-0000-0000-0000-000000000000"
+    },
+    "resource": "AshRemote.Backend.Todo"
+  },
+  "response": {
+    "data": null,
+    "success": true
+  }
+}

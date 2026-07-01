@@ -1,0 +1,24 @@
+{
+  "path": "/rpc/run",
+  "request": {
+    "action": "create",
+    "fields": [
+      "id",
+      "name",
+      "email"
+    ],
+    "input": {
+      "email": "ada@example.com",
+      "name": "Ada"
+    },
+    "resource": "AshRemote.Backend.User"
+  },
+  "response": {
+    "data": {
+      "email": "ada@example.com",
+      "id": "cad9da84-5da6-4046-9dfb-d519706f24d5",
+      "name": "Ada"
+    },
+    "success": true
+  }
+}

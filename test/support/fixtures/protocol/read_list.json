@@ -1,0 +1,31 @@
+{
+  "path": "/rpc/run",
+  "request": {
+    "action": "read",
+    "fields": [
+      "id",
+      "title",
+      "status",
+      "completed"
+    ],
+    "resource": "AshRemote.Backend.Todo",
+    "sort": "-title"
+  },
+  "response": {
+    "data": [
+      {
+        "completed": false,
+        "id": "faecdc96-d974-4fc5-8668-b55f08284a6a",
+        "status": "doing",
+        "title": "Write code"
+      },
+      {
+        "completed": false,
+        "id": "fa6fd6bd-7417-4470-b174-52f1dc1074f4",
+        "status": "pending",
+        "title": "Second"
+      }
+    ],
+    "success": true
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "path": "/rpc/validate",
+  "request": {
+    "action": "create",
+    "input": {},
+    "resource": "AshRemote.Backend.Todo"
+  },
+  "response": {
+    "errors": [
+      {
+        "message": "attribute title is required",
+        "path": [],
+        "type": "required"
+      }
+    ],
+    "success": false
+  }
+}

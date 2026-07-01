@@ -1,0 +1,24 @@
+{
+  "path": "/rpc/run",
+  "request": {
+    "action": "update",
+    "fields": [
+      "id",
+      "title"
+    ],
+    "input": {
+      "title": "Write more code"
+    },
+    "primary_key": {
+      "id": "faecdc96-d974-4fc5-8668-b55f08284a6a"
+    },
+    "resource": "AshRemote.Backend.Todo"
+  },
+  "response": {
+    "data": {
+      "id": "faecdc96-d974-4fc5-8668-b55f08284a6a",
+      "title": "Write more code"
+    },
+    "success": true
+  }
+}

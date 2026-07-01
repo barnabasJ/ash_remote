@@ -1,0 +1,15 @@
+{
+  "path": "/rpc/validate",
+  "request": {
+    "action": "create",
+    "input": {
+      "title": "ok",
+      "user_id": "cad9da84-5da6-4046-9dfb-d519706f24d5"
+    },
+    "resource": "AshRemote.Backend.Todo"
+  },
+  "response": {
+    "errors": [],
+    "success": true
+  }
+}

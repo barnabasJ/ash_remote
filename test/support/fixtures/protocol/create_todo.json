@@ -1,0 +1,27 @@
+{
+  "path": "/rpc/run",
+  "request": {
+    "action": "create",
+    "fields": [
+      "id",
+      "title",
+      "status",
+      "completed"
+    ],
+    "input": {
+      "status": "doing",
+      "title": "Write code",
+      "user_id": "cad9da84-5da6-4046-9dfb-d519706f24d5"
+    },
+    "resource": "AshRemote.Backend.Todo"
+  },
+  "response": {
+    "data": {
+      "completed": false,
+      "id": "faecdc96-d974-4fc5-8668-b55f08284a6a",
+      "status": "doing",
+      "title": "Write code"
+    },
+    "success": true
+  }
+}

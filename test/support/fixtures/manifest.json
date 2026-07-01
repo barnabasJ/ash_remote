@@ -1,0 +1,3501 @@
+{
+  "entrypoints": [
+    {
+      "action": {
+        "get": false,
+        "inputs": [
+          {
+            "allow_nil": false,
+            "has_default": false,
+            "name": "body",
+            "required": true,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "string",
+              "module": "Ash.Type.String",
+              "name": "String"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "todo_id",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "uuid",
+              "module": "Ash.Type.UUID",
+              "name": "UUID"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "user_id",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "uuid",
+              "module": "Ash.Type.UUID",
+              "name": "UUID"
+            }
+          }
+        ],
+        "metadata": [],
+        "name": "create",
+        "primary": true,
+        "type": "create"
+      },
+      "resource": "AshRemote.Backend.Comment"
+    },
+    {
+      "action": {
+        "get": false,
+        "inputs": [],
+        "metadata": [],
+        "name": "read",
+        "pagination": {
+          "countable": true,
+          "default_limit": null,
+          "keyset": true,
+          "max_page_size": 250,
+          "offset": true,
+          "required": false
+        },
+        "primary": true,
+        "type": "read"
+      },
+      "resource": "AshRemote.Backend.Comment"
+    },
+    {
+      "action": {
+        "get": false,
+        "inputs": [],
+        "metadata": [],
+        "name": "complete",
+        "primary": false,
+        "type": "update"
+      },
+      "resource": "AshRemote.Backend.Todo"
+    },
+    {
+      "action": {
+        "get": false,
+        "inputs": [
+          {
+            "allow_nil": false,
+            "has_default": false,
+            "name": "title",
+            "required": true,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "string",
+              "module": "Ash.Type.String",
+              "name": "String"
+            }
+          },
+          {
+            "allow_nil": false,
+            "has_default": true,
+            "name": "completed",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "boolean",
+              "module": "Ash.Type.Boolean",
+              "name": "Boolean"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": true,
+            "name": "status",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "type_ref",
+              "module": "AshRemote.Backend.Todo.Status",
+              "name": "Status"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "priority_score",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "type_ref",
+              "module": "AshRemote.Backend.PriorityScore",
+              "name": "PriorityScore"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "due_date",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "date",
+              "module": "Ash.Type.Date",
+              "name": "Date"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "user_id",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "uuid",
+              "module": "Ash.Type.UUID",
+              "name": "UUID"
+            }
+          }
+        ],
+        "metadata": [],
+        "name": "create",
+        "primary": true,
+        "type": "create"
+      },
+      "resource": "AshRemote.Backend.Todo"
+    },
+    {
+      "action": {
+        "get": false,
+        "inputs": [],
+        "metadata": [],
+        "name": "destroy",
+        "primary": true,
+        "type": "destroy"
+      },
+      "resource": "AshRemote.Backend.Todo"
+    },
+    {
+      "action": {
+        "get": true,
+        "inputs": [
+          {
+            "allow_nil": false,
+            "has_default": false,
+            "name": "id",
+            "required": true,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "uuid",
+              "module": "Ash.Type.UUID",
+              "name": "UUID"
+            }
+          }
+        ],
+        "metadata": [],
+        "name": "get_by_id",
+        "primary": false,
+        "type": "read"
+      },
+      "resource": "AshRemote.Backend.Todo"
+    },
+    {
+      "action": {
+        "get": false,
+        "inputs": [],
+        "metadata": [],
+        "name": "read",
+        "pagination": {
+          "countable": true,
+          "default_limit": 20,
+          "keyset": true,
+          "max_page_size": 250,
+          "offset": true,
+          "required": false
+        },
+        "primary": true,
+        "type": "read"
+      },
+      "resource": "AshRemote.Backend.Todo"
+    },
+    {
+      "action": {
+        "get": false,
+        "inputs": [
+          {
+            "allow_nil": false,
+            "has_default": false,
+            "name": "title",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "string",
+              "module": "Ash.Type.String",
+              "name": "String"
+            }
+          },
+          {
+            "allow_nil": false,
+            "has_default": true,
+            "name": "completed",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "boolean",
+              "module": "Ash.Type.Boolean",
+              "name": "Boolean"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": true,
+            "name": "status",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "type_ref",
+              "module": "AshRemote.Backend.Todo.Status",
+              "name": "Status"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "priority_score",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "type_ref",
+              "module": "AshRemote.Backend.PriorityScore",
+              "name": "PriorityScore"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "due_date",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "date",
+              "module": "Ash.Type.Date",
+              "name": "Date"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "user_id",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "uuid",
+              "module": "Ash.Type.UUID",
+              "name": "UUID"
+            }
+          }
+        ],
+        "metadata": [],
+        "name": "update",
+        "primary": true,
+        "type": "update"
+      },
+      "resource": "AshRemote.Backend.Todo"
+    },
+    {
+      "action": {
+        "get": false,
+        "inputs": [
+          {
+            "allow_nil": false,
+            "has_default": false,
+            "name": "name",
+            "required": true,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "string",
+              "module": "Ash.Type.String",
+              "name": "String"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "email",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "string",
+              "module": "Ash.Type.String",
+              "name": "String"
+            }
+          }
+        ],
+        "metadata": [],
+        "name": "create",
+        "primary": true,
+        "type": "create"
+      },
+      "resource": "AshRemote.Backend.User"
+    },
+    {
+      "action": {
+        "get": false,
+        "inputs": [],
+        "metadata": [],
+        "name": "read",
+        "pagination": {
+          "countable": true,
+          "default_limit": null,
+          "keyset": true,
+          "max_page_size": 250,
+          "offset": true,
+          "required": false
+        },
+        "primary": true,
+        "type": "read"
+      },
+      "resource": "AshRemote.Backend.User"
+    }
+  ],
+  "filter_capabilities": {
+    "boolean_connectives": [
+      "and",
+      "or",
+      "not"
+    ],
+    "custom_expressions": [],
+    "functions": [
+      {
+        "description": "Subtracts the given interval or Duration from the current time in UTC.\n\nFor example:\n   deleted_at > ago(7, :day)\n   deleted_at > ago(Duration.new!(day: 7))\n\nDocumentation + available intervals inspired by the corresponding ecto interval implementation\n",
+        "module": "Ash.Query.Function.Ago",
+        "name": "ago",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.UtcDatetimeUsec"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.DurationName"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Gets an element in the list by index\n",
+        "module": "Ash.Query.Function.At",
+        "name": "at",
+        "predicate": false,
+        "returns": {
+          "kind": "same"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "array",
+                "of": {
+                  "kind": "any"
+                }
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Constructs a composite type in a way that is natively understood by the data layer\n\nTo do this, provide a tuple matching the format expected by the type in question.\nCheck that type's documentation for this information.\n",
+        "module": "Ash.Query.Function.CompositeType",
+        "name": "composite_type",
+        "predicate": false,
+        "returns": {
+          "kind": "any"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "any"
+              },
+              {
+                "kind": "any"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "any"
+              },
+              {
+                "kind": "any"
+              },
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns true if the first string contains the second.\n\nCase insensitive strings are accounted for on either side.\n\n   contains(\"foo\", \"fo\")\n   true\n\n   contains(%Ash.CiString{:string \"foo\"}, \"FoO\")\n   true\n\n   contains(\"foo\", %Ash.CiString{:string \"FOO\"})\n   true\n",
+        "module": "Ash.Query.Function.Contains",
+        "name": "contains",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.String"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns the count of nil.\n\n    count_nil([nil, 1, nil]) # 2\n",
+        "module": "Ash.Query.Function.CountNils",
+        "name": "count_nils",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Integer"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "array",
+                "of": {
+                  "kind": "any"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Adds the given interval or Duration to the current time in UTC\nAdds the given interval or Duration to the current time in UTC\n\nFor example:\n   activates_at < date_add(today(), 7, :day)\n   activates_at < date_add(today(), Duration.new!(day: 7))\n   activates_at < date_add(today(), Duration.new!(day: 7))\n\nDocumentation + available intervals inspired by the corresponding ecto interval implementation\n",
+        "module": "Ash.Query.Function.DateAdd",
+        "name": "date_add",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Date"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Date"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.DurationName"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Date"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Adds the given interval or Duration to the current time in UTC\n\nFor example:\n   activates_at < datetime_add(now(), 7, :day)\n   activates_at < datetime_add(now(), Duration.new!(day:7))\n\nDocumentation + available intervals inspired by the corresponding ecto interval implementation\n",
+        "module": "Ash.Query.Function.DateTimeAdd",
+        "name": "datetime_add",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.UtcDatetime"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.UtcDatetime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.DurationName"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.UtcDatetime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Adds the given interval from the current time in UTC.\n\nFor example:\n   expires_at < from_now(7, :day)\n\nDocumentation + available intervals inspired by the corresponding ecto interval implementation\n",
+        "module": "Ash.Query.Function.Fragment",
+        "name": "fragment",
+        "predicate": false,
+        "returns": {
+          "kind": "any"
+        },
+        "signatures": "var_args"
+      },
+      {
+        "description": "Adds the given interval or Duration from the current time in UTC.\n\nFor example:\n   expires_at < from_now(7, :day)\n   expires_at < from_now(Duration.new!(day: 7))\n\nDocumentation + available intervals inspired by the corresponding ecto interval implementation\n",
+        "module": "Ash.Query.Function.FromNow",
+        "name": "from_now",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.UtcDatetime"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.DurationName"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Gets the value at the provided path in the value, which must be a map or embed.\n\nIf you are using a datalayer that provides a `type` function (like AshPostgres), it is a good idea to\nwrap your call in that function, e.g `type(author[:bio][:title], :string)`, since data layers that depend\non knowing types may not be able to infer the type from the path. Ash may eventually be able to figure out\nthe type, in the case that the path consists of only embedded attributes.\n\nIf an atom key is provided, access is *indiscriminate* of atoms vs strings. The atom key is checked first.\nIf a string key is provided, that is the only thing that is checked. If the value will or may be a struct, be sure to use atoms.\n\nThe data layer may handle this differently, for example, AshPostgres only checks\nstrings at the data layer (because that's all it can be in the database anyway).\n\nAvailable in query expressions using bracket syntax, e.g `foo[:bar][:baz]`.\n",
+        "module": "Ash.Query.Function.GetPath",
+        "name": "get_path",
+        "predicate": false,
+        "returns": {
+          "kind": "any"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Map"
+              },
+              {
+                "kind": "array",
+                "of": {
+                  "kind": "any"
+                }
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Map"
+              },
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns true if the second argument is found in the first\n\n   contains([1, 2, 3], 1)\n   true\n\n   contains([1, 2, 3], 4)\n   false\n\n   contains(nil, 1)\n   nil\n",
+        "module": "Ash.Query.Function.Has",
+        "name": "has",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "array",
+                "of": {
+                  "kind": "any"
+                }
+              },
+              {
+                "kind": "same"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "is_distinct_from(left, right)\n\nSQL's IS DISTINCT FROM operator.\nUnlike `!=`, this operator treats NULL as a comparable value.\n\nWhen both sides cannot return NULL, this simplifies to `!=` for better performance.\n",
+        "module": "Ash.Query.Function.IsDistinctFrom",
+        "name": "is_distinct_from",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "any"
+              },
+              {
+                "kind": "same"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "true if the provided field is nil\n",
+        "module": "Ash.Query.Function.IsNil",
+        "name": "is_nil",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "is_not_distinct_from(left, right)\n\nSQL's IS NOT DISTINCT FROM operator (NULL-safe equality).\nUnlike `==`, this operator treats NULL as equal to NULL.\n\nWhen both sides cannot return NULL, this simplifies to `==` for better performance.\n",
+        "module": "Ash.Query.Function.IsNotDistinctFrom",
+        "name": "is_not_distinct_from",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "any"
+              },
+              {
+                "kind": "same"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "If predicate is truthy, then the second argument is returned, otherwise the third.\n",
+        "module": "Ash.Query.Function.If",
+        "name": "if",
+        "predicate": false,
+        "returns": {
+          "kind": "same"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Boolean"
+              },
+              {
+                "kind": "any"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Boolean"
+              },
+              {
+                "kind": "any"
+              },
+              {
+                "kind": "same"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns true if the two arguments intersect.\n\n   intersects([1, 2, 3], [1])\n   true\n\n   intersects([1, 2, 3], [4])\n   false\n\n   intersects([1], nil)\n   nil\n\n   intersects(nil, [1])\n   nil\n",
+        "module": "Ash.Query.Function.Intersects",
+        "name": "intersects",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "array",
+                "of": {
+                  "kind": "any"
+                }
+              },
+              {
+                "kind": "array",
+                "of": {
+                  "kind": "same"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Runs the provided MFA and returns the result as a known value.\n\nEvaluated just before running the query.\n",
+        "module": "Ash.Query.Function.Lazy",
+        "name": "lazy",
+        "predicate": false,
+        "returns": {
+          "kind": "any"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns the length of a list attribute defined by the composite type `{:array, Type}`.\n\n    length(roles)\n\nIf the attribute allows nils:\n\n    length(roles || [])\n\n",
+        "module": "Ash.Query.Function.Length",
+        "name": "length",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Integer"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "array",
+                "of": {
+                  "kind": "any"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Negates the value\n",
+        "module": "Ash.Query.Function.Minus",
+        "name": "-",
+        "predicate": false,
+        "returns": {
+          "kind": "same"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns the current datetime\n",
+        "module": "Ash.Query.Function.Now",
+        "name": "now",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.UtcDatetimeUsec"
+        },
+        "signatures": [
+          {
+            "args": []
+          }
+        ]
+      },
+      {
+        "description": "If the predicate is truthy, the provided exception is raised with the provided values.\n\nThis exception is not \"raised\" in the Elixir sense, but the entire expression fails to\nevaluate with the given error. Various data layers will handle this differently.\n",
+        "module": "Ash.Query.Function.Error",
+        "name": "error",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "no_return"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Atom"
+              },
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Rounds a float, decimal or integer to the given number of points\n",
+        "module": "Ash.Query.Function.Rem",
+        "name": "rem",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Integer"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Rounds a float, decimal or integer to the given number of points\n",
+        "module": "Ash.Query.Function.Round",
+        "name": "round",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Float"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Float"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Decimal"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Float"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Decimal"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns the current date.\n",
+        "module": "Ash.Query.Function.Today",
+        "name": "today",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Date"
+        },
+        "signatures": [
+          {
+            "args": []
+          }
+        ]
+      },
+      {
+        "description": "Casts the value to a given type. Can also be used to provide type hints to data layers, where appropriate.\n",
+        "module": "Ash.Query.Function.Type",
+        "name": "type",
+        "predicate": false,
+        "returns": "unknown",
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "any"
+              },
+              {
+                "kind": "any"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "any"
+              },
+              {
+                "kind": "any"
+              },
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Converts a date or datetime into the start of day\n\nAccepts an optional time zone, in the same format that can be passed to\n`DateTime.new/3`.\n\nFor example:\n   start_of_day(now()) < a_datetime()\n   start_of_day(now(), \"Europe/Copenhagen\") < a_datetime()\n",
+        "module": "Ash.Query.Function.StartOfDay",
+        "name": "start_of_day",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.UtcDatetime"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.DateTime"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.DateTime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Date"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Date"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Downcase a string\n",
+        "module": "Ash.Query.Function.StringDowncase",
+        "name": "string_downcase",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.String"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns true if the first string ends with the second.\n\nCase insensitive strings are accounted for on either side.\n\n   string_ends_with(\"foo\", \"oo\")\n   true\n\n   string_ends_with(%Ash.CiString{string: \"foo\"}, \"OO\")\n   true\n\n   string_ends_with(\"foo\", %Ash.CiString{string: \"OO\"})\n   true\n",
+        "module": "Ash.Query.Function.StringEndsWith",
+        "name": "string_ends_with",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Joins a list of values.\n\nIgnores `nil` values and concatenates the remaining non-nil values. An optional\njoiner can be provided.\n\n    string_join([first_name, last_name], \" \")\n\n    string_join([item_a, item_b])\n",
+        "module": "Ash.Query.Function.StringJoin",
+        "name": "string_join",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.String"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "array",
+                "of": {
+                  "kind": "concrete",
+                  "type_ref": "Ash.Type.String"
+                }
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "array",
+                "of": {
+                  "kind": "concrete",
+                  "type_ref": "Ash.Type.String"
+                }
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "array",
+                "of": {
+                  "kind": "concrete",
+                  "type_ref": "Ash.Type.String"
+                }
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "array",
+                "of": {
+                  "kind": "concrete",
+                  "type_ref": "Ash.Type.CiString"
+                }
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "array",
+                "of": {
+                  "kind": "concrete",
+                  "type_ref": "Ash.Type.CiString"
+                }
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Trims whitespace from a string\n",
+        "module": "Ash.Query.Function.StringLength",
+        "name": "string_length",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Integer"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns the zero-based position of a substring within a string, nil if the string does not contain the substring.\n\nCase insensitive strings are accounted for on either side.\n\n   string_position(\"foo\", \"fo\")\n   0\n\n   string_position(%Ash.CiString{string: \"foo\"}, \"FoO\")\n   0\n\n   string_position(\"foo\", %Ash.CiString{string: \"FOO\"})\n   0\n",
+        "module": "Ash.Query.Function.StringPosition",
+        "name": "string_position",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.String"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Split a string into a list of strings\n\nSplits a string on the given delimiter. The delimiter defaults to a single space. Also supports options.\n\nKeep in mind, this function does *not* support regexes the way that `String.split/3` does, only raw strings.\n\n    string_split(employee_code)\n    string_split(full_name, \"foo\")\n    string_split(full_name, \"foo\", trim?: true)\n\n## Options\n\n* `:trim?` (`t:boolean/0`) - Whether or not to trim empty strings from the beginning or end of the result. Equivalent to the `trim` option to `String.split/3` The default value is `false`.\n\n\n",
+        "module": "Ash.Query.Function.StringSplit",
+        "name": "string_split",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.String"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "constraints": "[fields: [trim?: [type: :boolean, default: false, doc: \"Whether or not to trim empty strings from the beginning or end of the result. Equivalent to the `trim` option to `String.split/3`\"]]]",
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Keyword"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "constraints": "[fields: [trim?: [type: :boolean, default: false, doc: \"Whether or not to trim empty strings from the beginning or end of the result. Equivalent to the `trim` option to `String.split/3`\"]]]",
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Keyword"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "constraints": "[fields: [trim?: [type: :boolean, default: false, doc: \"Whether or not to trim empty strings from the beginning or end of the result. Equivalent to the `trim` option to `String.split/3`\"]]]",
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Keyword"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "constraints": "[fields: [trim?: [type: :boolean, default: false, doc: \"Whether or not to trim empty strings from the beginning or end of the result. Equivalent to the `trim` option to `String.split/3`\"]]]",
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Keyword"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns true if the first string starts with the second.\n\nCase insensitive strings are accounted for on either side.\n\n   string_starts_with(\"foo\", \"fo\")\n   true\n\n   string_starts_with(%Ash.CiString{string: \"foo\"}, \"FoO\")\n   false\n\n   string_starts_with(%Ash.CiString{string: \"foo\"}, \"Fo\")\n   true\n",
+        "module": "Ash.Query.Function.StringStartsWith",
+        "name": "string_starts_with",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Trims whitespace from a string\n",
+        "module": "Ash.Query.Function.StringTrim",
+        "name": "string_trim",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.String"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "operators": [
+      {
+        "aliases": [],
+        "description": "left is_nil true/false\n\nThis predicate matches if the left is nil when the right is `true` or if the\nleft is not nil when the right is `false`\n",
+        "module": "Ash.Query.Operator.IsNil",
+        "name": "is_nil",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "any"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Boolean"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [
+          "eq"
+        ],
+        "description": "left == right\n\nThe simplest operator, matches if the left and right are equal.\n\nFor comparison, this compares as mutually exclusive with other equality\nand `is_nil` checks that have the same reference on the left side\n",
+        "module": "Ash.Query.Operator.Eq",
+        "name": "==",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "any"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "same"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [
+          "not_eq"
+        ],
+        "description": "left != right\n\nIn comparison, simplifies to `not(left == right)`\n",
+        "module": "Ash.Query.Operator.NotEq",
+        "name": "!=",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "same"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [],
+        "description": "left in [1, 2, 3]\n\nthis predicate matches if the left is in the list on the right\n\nFor comparison, this simplifies to a set of \"or equals\", e.g\n`{:or, {:or, {:or, left == 1}, left == 2}, left == 3}`\n",
+        "module": "Ash.Query.Operator.In",
+        "name": "in",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "any"
+              },
+              {
+                "kind": "array",
+                "of": {
+                  "kind": "same"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [
+          "less_than"
+        ],
+        "description": "left < right\n\nDoes not simplify, but is used as the simplification value for\n`Ash.Query.Operator.LessThanOrEqual`, `Ash.Query.Operator.GreaterThan` and\n`Ash.Query.Operator.GreaterThanOrEqual`.\n\nWhen comparing predicates, it is mutually exclusive with `Ash.Query.Operator.IsNil`.\nAdditionally, it compares as mutually inclusive with any `Ash.Query.Operator.Eq` and\nany `Ash.Query.Operator.LessThan` who's right sides are less than it, and mutually\nexclusive with any `Ash.Query.Operator.Eq` or `Ash.Query.Operator.GreaterThan` who's\nright side's are greater than or equal to it.\n",
+        "module": "Ash.Query.Operator.LessThan",
+        "name": "<",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "same"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [
+          "greater_than"
+        ],
+        "description": "left > right\n\nIn comparison, simplifies to `not(left < right + 1)`, so it will never need to be compared against.\n",
+        "module": "Ash.Query.Operator.GreaterThan",
+        "name": ">",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "same"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [
+          "less_than_or_equal"
+        ],
+        "description": "left <= right\n\nIn comparison, simplifies to `left < right + 1`, so it will never need to be compared against.\n",
+        "module": "Ash.Query.Operator.LessThanOrEqual",
+        "name": "<=",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "same"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [
+          "greater_than_or_equal"
+        ],
+        "description": "left >= right\n\nIn comparison, simplifies to `not(left < right)`, so it will never need to be compared against.\n",
+        "module": "Ash.Query.Operator.GreaterThanOrEqual",
+        "name": ">=",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "same"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [
+          "and"
+        ],
+        "module": "Ash.Query.Operator.Basic.And",
+        "name": "&&",
+        "predicate": false,
+        "returns": {
+          "kind": "same"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "same"
+              },
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [
+          "or"
+        ],
+        "module": "Ash.Query.Operator.Basic.Or",
+        "name": "||",
+        "predicate": false,
+        "returns": {
+          "kind": "same"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "same"
+              },
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [
+          "concat"
+        ],
+        "module": "Ash.Query.Operator.Basic.Concat",
+        "name": "<>",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.String"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [
+          "div"
+        ],
+        "module": "Ash.Query.Operator.Basic.Div",
+        "name": "/",
+        "predicate": false,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Float"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Float"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Float"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Decimal"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Decimal"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Float"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Decimal"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Decimal"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Float"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Float"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Decimal"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Float"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Decimal"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [
+          "minus"
+        ],
+        "module": "Ash.Query.Operator.Basic.Minus",
+        "name": "-",
+        "predicate": false,
+        "returns": {
+          "kind": "same"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "same"
+              },
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [
+          "times"
+        ],
+        "module": "Ash.Query.Operator.Basic.Times",
+        "name": "*",
+        "predicate": false,
+        "returns": {
+          "kind": "same"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "same"
+              },
+              {
+                "kind": "any"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "aliases": [
+          "plus"
+        ],
+        "module": "Ash.Query.Operator.Basic.Plus",
+        "name": "+",
+        "predicate": false,
+        "returns": {
+          "kind": "same"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "same"
+              },
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "predicate_custom_expressions": [],
+    "predicate_functions": [
+      "contains",
+      "has",
+      "is_distinct_from",
+      "is_not_distinct_from",
+      "intersects",
+      "string_ends_with",
+      "string_starts_with"
+    ],
+    "predicate_operators": [
+      "is_nil",
+      "==",
+      "!=",
+      "in",
+      "<",
+      ">",
+      "<=",
+      ">="
+    ]
+  },
+  "resources": [
+    {
+      "embedded": false,
+      "fields": {
+        "body": {
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "contains",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            },
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "string_ends_with",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            },
+            {
+              "name": "string_starts_with",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "string",
+            "module": "Ash.Type.String",
+            "name": "String"
+          },
+          "writable": true
+        },
+        "id": {
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": true,
+          "kind": "attribute",
+          "primary_key": true,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "uuid",
+            "module": "Ash.Type.UUID",
+            "name": "UUID"
+          },
+          "writable": false
+        },
+        "todo_id": {
+          "allow_nil": true,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "uuid",
+            "module": "Ash.Type.UUID",
+            "name": "UUID"
+          },
+          "writable": true
+        },
+        "user_id": {
+          "allow_nil": true,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "uuid",
+            "module": "Ash.Type.UUID",
+            "name": "UUID"
+          },
+          "writable": true
+        }
+      },
+      "module": "AshRemote.Backend.Comment",
+      "name": "Comment",
+      "primary_key": [
+        "id"
+      ],
+      "relationships": {
+        "todo": {
+          "allow_nil": true,
+          "cardinality": "one",
+          "destination": "AshRemote.Backend.Todo",
+          "filterable": true,
+          "sortable": true,
+          "type": "belongs_to"
+        },
+        "user": {
+          "allow_nil": true,
+          "cardinality": "one",
+          "destination": "AshRemote.Backend.User",
+          "filterable": true,
+          "sortable": true,
+          "type": "belongs_to"
+        }
+      }
+    },
+    {
+      "embedded": false,
+      "fields": {
+        "comment_count": {
+          "aggregate_kind": "count",
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "aggregate",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "integer",
+            "module": "Ash.Type.Integer",
+            "name": "Integer"
+          },
+          "writable": false
+        },
+        "completed": {
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            }
+          ],
+          "filterable": true,
+          "has_default": true,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "boolean",
+            "module": "Ash.Type.Boolean",
+            "name": "Boolean"
+          },
+          "writable": true
+        },
+        "due_date": {
+          "allow_nil": true,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "date",
+            "module": "Ash.Type.Date",
+            "name": "Date"
+          },
+          "writable": true
+        },
+        "id": {
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": true,
+          "kind": "attribute",
+          "primary_key": true,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "uuid",
+            "module": "Ash.Type.UUID",
+            "name": "UUID"
+          },
+          "writable": false
+        },
+        "is_overdue": {
+          "allow_nil": true,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "calculation",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "boolean",
+            "module": "Ash.Type.Boolean",
+            "name": "Boolean"
+          },
+          "writable": false
+        },
+        "priority_score": {
+          "allow_nil": true,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "type_ref",
+            "module": "AshRemote.Backend.PriorityScore",
+            "name": "PriorityScore"
+          },
+          "writable": true
+        },
+        "status": {
+          "allow_nil": true,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": true,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "type_ref",
+            "module": "AshRemote.Backend.Todo.Status",
+            "name": "Status"
+          },
+          "writable": true
+        },
+        "title": {
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "contains",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            },
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "string_ends_with",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            },
+            {
+              "name": "string_starts_with",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "string",
+            "module": "Ash.Type.String",
+            "name": "String"
+          },
+          "writable": true
+        },
+        "title_with_prefix": {
+          "allow_nil": true,
+          "arguments": [
+            {
+              "allow_nil": false,
+              "has_default": true,
+              "name": "prefix",
+              "required": null,
+              "sensitive": false,
+              "type": {
+                "allow_nil": null,
+                "kind": "string",
+                "module": "Ash.Type.String",
+                "name": "String"
+              }
+            }
+          ],
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "contains",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            },
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "string_ends_with",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            },
+            {
+              "name": "string_starts_with",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "calculation",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "string",
+            "module": "Ash.Type.String",
+            "name": "String"
+          },
+          "writable": false
+        },
+        "user_id": {
+          "allow_nil": true,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "uuid",
+            "module": "Ash.Type.UUID",
+            "name": "UUID"
+          },
+          "writable": true
+        }
+      },
+      "module": "AshRemote.Backend.Todo",
+      "name": "Todo",
+      "primary_key": [
+        "id"
+      ],
+      "relationships": {
+        "comments": {
+          "allow_nil": true,
+          "cardinality": "many",
+          "destination": "AshRemote.Backend.Comment",
+          "filterable": true,
+          "sortable": true,
+          "type": "has_many"
+        },
+        "user": {
+          "allow_nil": true,
+          "cardinality": "one",
+          "destination": "AshRemote.Backend.User",
+          "filterable": true,
+          "sortable": true,
+          "type": "belongs_to"
+        }
+      }
+    },
+    {
+      "embedded": false,
+      "fields": {
+        "email": {
+          "allow_nil": true,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "contains",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            },
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "string_ends_with",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            },
+            {
+              "name": "string_starts_with",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "string",
+            "module": "Ash.Type.String",
+            "name": "String"
+          },
+          "writable": true
+        },
+        "id": {
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": true,
+          "kind": "attribute",
+          "primary_key": true,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "uuid",
+            "module": "Ash.Type.UUID",
+            "name": "UUID"
+          },
+          "writable": false
+        },
+        "name": {
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "contains",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            },
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "string_ends_with",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            },
+            {
+              "name": "string_starts_with",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "string",
+            "module": "Ash.Type.String",
+            "name": "String"
+          },
+          "writable": true
+        }
+      },
+      "module": "AshRemote.Backend.User",
+      "name": "User",
+      "primary_key": [
+        "id"
+      ],
+      "relationships": {
+        "todos": {
+          "allow_nil": true,
+          "cardinality": "many",
+          "destination": "AshRemote.Backend.Todo",
+          "filterable": true,
+          "sortable": true,
+          "type": "has_many"
+        }
+      }
+    }
+  ],
+  "schema_version": "1.0.0",
+  "sort_capabilities": {
+    "directions": [
+      "asc",
+      "desc",
+      "asc_nils_first",
+      "asc_nils_last",
+      "desc_nils_first",
+      "desc_nils_last"
+    ]
+  },
+  "types": [
+    {
+      "allow_nil": null,
+      "kind": "integer",
+      "module": "AshRemote.Backend.PriorityScore",
+      "name": "PriorityScore"
+    },
+    {
+      "allow_nil": null,
+      "kind": "enum",
+      "module": "AshRemote.Backend.Todo.Status",
+      "name": "Status",
+      "values": [
+        "pending",
+        "doing",
+        "done"
+      ]
+    }
+  ]
+}

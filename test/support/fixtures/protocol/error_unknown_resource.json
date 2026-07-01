@@ -1,0 +1,19 @@
+{
+  "path": "/rpc/run",
+  "request": {
+    "action": "read",
+    "fields": [
+      "id"
+    ],
+    "resource": "AshRemote.Backend.Nope"
+  },
+  "response": {
+    "errors": [
+      {
+        "message": "Unknown resource: AshRemote.Backend.Nope",
+        "type": "unknown_resource"
+      }
+    ],
+    "success": false
+  }
+}

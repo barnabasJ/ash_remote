@@ -1,0 +1,49 @@
+{
+  "path": "/rpc/run",
+  "request": {
+    "action": "read",
+    "fields": [
+      "id",
+      "title",
+      "is_overdue",
+      {
+        "comment_count": []
+      },
+      {
+        "title_with_prefix": {
+          "args": {
+            "prefix": "TODO: "
+          }
+        }
+      },
+      {
+        "user": [
+          "id",
+          "name"
+        ]
+      }
+    ],
+    "filter": {
+      "id": {
+        "eq": "faecdc96-d974-4fc5-8668-b55f08284a6a"
+      }
+    },
+    "resource": "AshRemote.Backend.Todo"
+  },
+  "response": {
+    "data": [
+      {
+        "comment_count": 1,
+        "id": "faecdc96-d974-4fc5-8668-b55f08284a6a",
+        "is_overdue": false,
+        "title": "Write code",
+        "title_with_prefix": "TODO:Write code",
+        "user": {
+          "id": "cad9da84-5da6-4046-9dfb-d519706f24d5",
+          "name": "Ada"
+        }
+      }
+    ],
+    "success": true
+  }
+}
