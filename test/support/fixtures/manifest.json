@@ -173,31 +173,6 @@
     },
     {
       "action": {
-        "get": true,
-        "inputs": [
-          {
-            "allow_nil": false,
-            "has_default": false,
-            "name": "id",
-            "required": true,
-            "sensitive": false,
-            "type": {
-              "allow_nil": null,
-              "kind": "uuid",
-              "module": "Ash.Type.UUID",
-              "name": "UUID"
-            }
-          }
-        ],
-        "metadata": [],
-        "name": "get_by_id",
-        "primary": false,
-        "type": "read"
-      },
-      "resource": "AshRemote.Backend.Todo"
-    },
-    {
-      "action": {
         "get": false,
         "inputs": [],
         "metadata": [],

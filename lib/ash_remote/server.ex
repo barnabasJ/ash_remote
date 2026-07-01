@@ -23,22 +23,24 @@ defmodule AshRemote.Server do
 
   alias AshRemote.Server.Fields
 
-  @doc "All resources exposed for an OTP app (every resource in its domains)."
-  def resources(otp_app) do
-    otp_app |> Ash.Info.domains() |> Enum.flat_map(&Ash.Domain.Info.resources/1)
+  @doc "The exposed `{resource, action}` entrypoints across an OTP app's `AshRemote.Rpc` domains."
+  def entrypoints(otp_app) do
+    otp_app
+    |> Ash.Info.domains()
+    |> Enum.filter(&AshRemote.Rpc.Info.rpc?/1)
+    |> Enum.flat_map(&AshRemote.Rpc.Info.entrypoints/1)
   end
 
-  @doc """
-  Generate the exposed surface as a JSON `Ash.Info.Manifest`.
+  @doc "Resources that have at least one exposed action."
+  def resources(otp_app) do
+    otp_app |> entrypoints() |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
+  end
 
-  With no `entrypoints`, every public action of the app's domains is included —
-  the same surface the RPC router exposes. Pass explicit `{resource, action}`
-  entrypoints to restrict it.
-  """
-  def manifest_json(otp_app, entrypoints \\ nil) do
-    opts = [otp_app: otp_app]
-    opts = if entrypoints, do: Keyword.put(opts, :action_entrypoints, entrypoints), else: opts
-    {:ok, spec} = Ash.Info.Manifest.generate(opts)
+  @doc "Generate the exposed surface as a JSON `Ash.Info.Manifest` (exactly the `rpc do` block)."
+  def manifest_json(otp_app) do
+    {:ok, spec} =
+      Ash.Info.Manifest.generate(otp_app: otp_app, action_entrypoints: entrypoints(otp_app))
+
     {:ok, json} = Ash.Info.Manifest.JsonSerializer.to_json(spec, pretty: true)
     json
   end
@@ -46,7 +48,7 @@ defmodule AshRemote.Server do
   @doc "Run an action against the exposed resources. Returns the response envelope."
   def run_action(otp_app, params) do
     with {:ok, resource} <- resolve_resource(otp_app, params["resource"]),
-         {:ok, action} <- resolve_action(resource, params["action"]) do
+         {:ok, action} <- resolve_action(otp_app, resource, params["action"]) do
       %{"success" => true, "data" => dispatch(resource, action, params)}
     end
     |> normalize()
@@ -57,7 +59,7 @@ defmodule AshRemote.Server do
   @doc "Validate an action's input without executing. Returns the response envelope."
   def validate_action(otp_app, params) do
     with {:ok, resource} <- resolve_resource(otp_app, params["resource"]),
-         {:ok, action} <- resolve_action(resource, params["action"]) do
+         {:ok, action} <- resolve_action(otp_app, resource, params["action"]) do
       input = params["input"] || %{}
 
       subject =
@@ -169,16 +171,19 @@ defmodule AshRemote.Server do
       else: {:error, {:unknown_resource, module_string}}
   end
 
-  defp resolve_action(resource, name) when is_binary(name) do
-    case Ash.Resource.Info.action(resource, String.to_existing_atom(name)) do
-      nil -> {:error, {:unknown_action, name}}
-      action -> {:ok, action}
+  defp resolve_action(otp_app, resource, name) when is_binary(name) do
+    action_name = String.to_existing_atom(name)
+
+    cond do
+      {resource, action_name} not in entrypoints(otp_app) -> {:error, {:unknown_action, name}}
+      action = Ash.Resource.Info.action(resource, action_name) -> {:ok, action}
+      true -> {:error, {:unknown_action, name}}
     end
   rescue
     ArgumentError -> {:error, {:unknown_action, name}}
   end
 
-  defp resolve_action(_resource, _), do: {:error, :missing_action}
+  defp resolve_action(_otp_app, _resource, _), do: {:error, :missing_action}
 
   defp valid?(%Ash.Changeset{valid?: valid?}), do: valid?
   defp valid?(%Ash.Query{valid?: valid?}), do: valid?

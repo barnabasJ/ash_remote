@@ -13,26 +13,10 @@ defmodule AshRemote.E2ETest do
   @namespace "AshRemote.E2EGen"
 
   setup_all do
-    # Publish the manifest fresh from the backend (backend → manifest → generate).
-    {:ok, spec} =
-      Ash.Info.Manifest.generate(
-        otp_app: :ash_remote,
-        action_entrypoints: [
-          {AshRemote.Backend.Todo, :read},
-          {AshRemote.Backend.Todo, :get_by_id},
-          {AshRemote.Backend.Todo, :create},
-          {AshRemote.Backend.Todo, :update},
-          {AshRemote.Backend.Todo, :destroy},
-          {AshRemote.Backend.User, :read},
-          {AshRemote.Backend.User, :create},
-          {AshRemote.Backend.Comment, :read},
-          {AshRemote.Backend.Comment, :create}
-        ]
-      )
-
-    {:ok, json} = Ash.Info.Manifest.JsonSerializer.to_json(spec)
+    # Publish the manifest fresh from the backend's `rpc do` exposure block
+    # (backend → manifest → generate), exactly as the RPC server does.
     path = Path.join(System.tmp_dir!(), "ash_remote_e2e_manifest.json")
-    File.write!(path, json)
+    File.write!(path, AshRemote.Server.manifest_json(:ash_remote))
 
     manifest = AshRemote.Manifest.Loader.load!(path)
     modules = AshRemote.Gen.generate(manifest, namespace: @namespace)
