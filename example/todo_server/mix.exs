@@ -23,7 +23,7 @@ defmodule TodoServer.MixProject do
 
   defp publish_manifest(_args) do
     Mix.Task.run("compile")
-    File.write!(@manifest_path, TodoServer.Rpc.Manifest.to_json())
+    File.write!(@manifest_path, AshRemote.Server.manifest_json(:todo_server))
     Mix.shell().info("wrote #{@manifest_path}")
   end
 
@@ -38,6 +38,8 @@ defmodule TodoServer.MixProject do
     [
       # Ash.Info.Manifest is an unreleased ash-core feature — path dep on the local checkout.
       {:ash, path: "/home/joba/sandbox/ash"},
+      # ash_remote provides the server-side RPC router + manifest (the shared core).
+      {:ash_remote, path: "../.."},
       {:simple_sat, "~> 0.1"},
       {:plug, "~> 1.16"},
       {:bandit, "~> 1.5"},

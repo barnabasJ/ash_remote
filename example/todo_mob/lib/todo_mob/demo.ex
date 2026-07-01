@@ -23,7 +23,7 @@ defmodule TodoMob.Demo do
 
     walk = Enum.find(socket.assigns.todos, &(&1.title == "Walk the dog"))
 
-    # Toggle complete (custom :complete action) over RPC.
+    # Toggle completion via the update action over RPC.
     socket = Mob.Screen.dispatch(Screen, socket, {:tap, {:toggle, walk.id}})
     toggled = Enum.find(socket.assigns.todos, &(&1.id == walk.id))
     log("after toggle", %{completed: toggled.completed})

@@ -59,8 +59,7 @@ defmodule TodoMob.TodoListScreen do
   @impl true
   def handle_info({:tap, {:toggle, id}}, socket) do
     todo = Enum.find(socket.assigns.todos, &(&1.id == id))
-    action = if todo.completed, do: :reopen, else: :complete
-    {:ok, _updated} = Ash.update(todo, %{}, action: action)
+    {:ok, _updated} = Ash.update(todo, %{completed: not todo.completed})
     {:noreply, Mob.Socket.assign(socket, :todos, list_todos())}
   end
 

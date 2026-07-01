@@ -33,7 +33,7 @@ defmodule TodoMob.TodoListScreenTest do
     assert Enum.map(Ash.read!(TodoServer.Todo), & &1.title) == ["Walk the dog"]
   end
 
-  test "toggle completes and reopens via the custom actions" do
+  test "toggle completes and reopens via the update action" do
     socket = Mob.Screen.mount(Screen)
     socket = Mob.Screen.dispatch(Screen, socket, {:change, %{"title" => "Ship it"}})
     socket = Mob.Screen.dispatch(Screen, socket, {:tap, :create})

@@ -5,7 +5,7 @@
 {:ok, _} = Application.ensure_all_started(:ash)
 
 port = 4998
-{:ok, _} = Bandit.start_link(plug: TodoServer.Rpc.Router, port: port, startup_log: false)
+{:ok, _} = Bandit.start_link(plug: TodoServer.RpcRouter, port: port, startup_log: false)
 Application.put_env(:ash_remote, :base_url, "http://127.0.0.1:#{port}")
 
 ExUnit.start()

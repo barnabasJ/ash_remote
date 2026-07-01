@@ -36,19 +36,6 @@ defmodule TodoServer.Todo do
 
     create :create, primary?: true
     update :update, primary?: true
-
-    update :complete do
-      accept []
-      require_atomic? false
-      change set_attribute(:completed, true)
-    end
-
-    update :reopen do
-      accept []
-      require_atomic? false
-      change set_attribute(:completed, false)
-    end
-
     destroy :destroy, primary?: true
   end
 end

@@ -10,7 +10,7 @@ defmodule TodoMob.Remote.User do
     managed_attributes([:id, :name])
     managed_relationships([:todos])
     managed_calculations([])
-    managed_actions([:create, :read])
+    managed_actions([:create, :destroy, :read, :update])
   end
 
   attributes do
@@ -28,8 +28,19 @@ defmodule TodoMob.Remote.User do
       accept([:name])
     end
 
+    destroy :destroy do
+      primary?(true)
+      require_atomic?(false)
+    end
+
     read :read do
       primary?(true)
+    end
+
+    update :update do
+      primary?(true)
+      require_atomic?(false)
+      accept([:name])
     end
   end
 end

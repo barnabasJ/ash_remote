@@ -9,7 +9,7 @@ defmodule TodoServer.Application do
     port = Application.get_env(:todo_server, :port, 4000)
 
     children = [
-      {Bandit, plug: TodoServer.Rpc.Router, port: port}
+      {Bandit, plug: TodoServer.RpcRouter, port: port}
     ]
 
     opts = [strategy: :one_for_one, name: TodoServer.Supervisor]

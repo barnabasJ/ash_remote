@@ -10,7 +10,7 @@ defmodule TodoMob.Remote.Todo do
     managed_attributes([:completed, :due_date, :id, :inserted_at, :priority, :title])
     managed_relationships([:user])
     managed_calculations([:overdue?])
-    managed_actions([:complete, :create, :destroy, :read, :reopen, :update])
+    managed_actions([:create, :destroy, :read, :update])
   end
 
   attributes do
@@ -33,12 +33,6 @@ defmodule TodoMob.Remote.Todo do
   end
 
   actions do
-    update :complete do
-      require_atomic?(false)
-      accept([])
-      manual(AshRemote.Manual.Update)
-    end
-
     create :create do
       primary?(true)
       accept([:title, :completed, :priority, :due_date, :user_id])
@@ -47,24 +41,16 @@ defmodule TodoMob.Remote.Todo do
     destroy :destroy do
       primary?(true)
       require_atomic?(false)
-      manual(AshRemote.Manual.Destroy)
     end
 
     read :read do
       primary?(true)
     end
 
-    update :reopen do
-      require_atomic?(false)
-      accept([])
-      manual(AshRemote.Manual.Update)
-    end
-
     update :update do
       primary?(true)
       require_atomic?(false)
       accept([:title, :completed, :priority, :due_date, :user_id])
-      manual(AshRemote.Manual.Update)
     end
   end
 end

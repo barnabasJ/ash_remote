@@ -3,17 +3,6 @@
     {
       "action": {
         "get": false,
-        "inputs": [],
-        "metadata": [],
-        "name": "complete",
-        "primary": false,
-        "type": "update"
-      },
-      "resource": "TodoServer.Todo"
-    },
-    {
-      "action": {
-        "get": false,
         "inputs": [
           {
             "allow_nil": false,
@@ -107,17 +96,6 @@
         "name": "read",
         "primary": true,
         "type": "read"
-      },
-      "resource": "TodoServer.Todo"
-    },
-    {
-      "action": {
-        "get": false,
-        "inputs": [],
-        "metadata": [],
-        "name": "reopen",
-        "primary": false,
-        "type": "update"
       },
       "resource": "TodoServer.Todo"
     },
@@ -228,6 +206,17 @@
         "get": false,
         "inputs": [],
         "metadata": [],
+        "name": "destroy",
+        "primary": true,
+        "type": "destroy"
+      },
+      "resource": "TodoServer.User"
+    },
+    {
+      "action": {
+        "get": false,
+        "inputs": [],
+        "metadata": [],
         "name": "read",
         "pagination": {
           "countable": true,
@@ -239,6 +228,31 @@
         },
         "primary": true,
         "type": "read"
+      },
+      "resource": "TodoServer.User"
+    },
+    {
+      "action": {
+        "get": false,
+        "inputs": [
+          {
+            "allow_nil": false,
+            "has_default": false,
+            "name": "name",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "string",
+              "module": "Ash.Type.String",
+              "name": "String"
+            }
+          }
+        ],
+        "metadata": [],
+        "name": "update",
+        "primary": true,
+        "type": "update"
       },
       "resource": "TodoServer.User"
     }
