@@ -114,8 +114,15 @@ defmodule AshRemote.Server do
       query |> Ash.read_one!() |> then(&Fields.serialize(&1, resource, fields))
     else
       case Ash.read!(query) do
-        %{results: results} -> Fields.serialize(results, resource, fields)
-        results -> Fields.serialize(results, resource, fields)
+        %{results: results} = page ->
+          %{
+            "results" => Fields.serialize(results, resource, fields),
+            "count" => Map.get(page, :count),
+            "type" => page.__struct__ |> Module.split() |> List.last() |> String.downcase()
+          }
+
+        results ->
+          Fields.serialize(results, resource, fields)
       end
     end
   end
@@ -240,12 +247,14 @@ defmodule AshRemote.Server do
   end
 
   defp error_type(%mod{}) do
-    case mod |> Module.split() |> List.last() do
-      "Forbidden" -> "forbidden"
-      "NotFound" -> "not_found"
-      "Required" -> "required"
-      "InvalidAttribute" -> "invalid"
-      other -> Macro.underscore(other)
+    segments = Module.split(mod)
+
+    cond do
+      "Forbidden" in segments -> "forbidden"
+      List.last(segments) == "NotFound" -> "not_found"
+      List.last(segments) == "Required" -> "required"
+      List.last(segments) == "InvalidAttribute" -> "invalid"
+      true -> segments |> List.last() |> Macro.underscore()
     end
   end
 
