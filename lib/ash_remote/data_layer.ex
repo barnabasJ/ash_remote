@@ -8,8 +8,9 @@ defmodule AshRemote.DataLayer do
   follow-up reads (each of which is itself a remote read), so no lateral-join
   support is advertised.
 
-  Transport/config is resolved via `config/1`. Until the `AshRemote.Resource`
-  extension exists (M3), this reads from application env:
+  Transport/config is resolved via `config/1`: for generated resources it comes
+  from the `AshRemote.Resource` extension (`remote do … end`); a hand-written
+  resource without the extension can instead supply it via application env:
 
       config :ash_remote, :remote_config, %{
         MyClient.Todo => %{base_url: "...", source: "Backend.Todo", action_map: %{}}
@@ -277,7 +278,7 @@ defmodule AshRemote.DataLayer do
   end
 
   # Prefer the `AshRemote.Resource` extension (generated resources); fall back to
-  # application env keyed by resource (the M2 hand-written mirror).
+  # application env keyed by resource (for resources without the extension).
   defp config(resource) do
     if AshRemote.Resource.Info.remote?(resource) do
       %{

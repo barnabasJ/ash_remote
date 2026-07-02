@@ -3,9 +3,13 @@ defmodule AshRemote.Encode.Filter do
   Encode an `Ash.Filter` (or filter expression) into the wire `filter_input`
   map form the backend parses with `Ash.Query.filter_input/2`.
 
-  Optionally gated: pass `:applicable` — a map of `field_name => [operator_name]`
-  (derived from the manifest's per-field `filter_operators`). An operator not in
-  a field's list raises a clear error rather than silently over-fetching.
+  Only the common operators (`==`, `!=`, `in`, `<`, `>`, `<=`, `>=`, `is_nil`) are
+  encoded; anything else raises at build time.
+
+  Optional gating: pass `:applicable` — a map of `field_name => [operator_name]`,
+  intended to come from the manifest's per-field `filter_operators`. An operator not
+  in a field's list raises a clear error. (Auto-populating `:applicable` from the
+  embedded manifest capabilities is not yet wired — see the plan.)
   """
 
   alias Ash.Query.{BooleanExpression, Not, Ref}

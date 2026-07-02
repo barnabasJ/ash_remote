@@ -3,10 +3,11 @@ defmodule AshRemote.Formatter do
   Field-name formatting between the client (snake_case Ash attribute names) and
   the wire.
 
-  `ash_typescript` camelCases field names on the wire by default. `ash_remote`
-  makes this pluggable; the default strategy is `:none` (snake_case on the wire),
-  which keeps a decoupled `ash_remote`↔reference-backend pair simple. Set the
-  strategy to `:camel` to interoperate with a camelCasing backend.
+  A utility for the two strategies: `:none` (snake_case — what the data layer and
+  reference backend currently use on the wire) and `:camel` (for interoperating with
+  a camelCasing backend like `ash_typescript`'s default). NOTE: the data layer does
+  not yet thread a configurable strategy through encode/decode — the wire is snake_case
+  today; this module is the building block for making it configurable.
   """
 
   @type strategy :: :none | :camel

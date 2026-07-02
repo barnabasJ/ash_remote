@@ -17,10 +17,10 @@ defmodule AshRemote.Server.Router do
     * `GET  /manifest.json` — the published `Ash.Info.Manifest`
     * `GET  /health`        — liveness check
 
-  The exposed surface is every public action of the OTP app's Ash domains (the
-  same set the published manifest describes). `Plug` is referenced only inside
-  the macro expansion, so only the backend using this router needs `plug` —
-  `ash_remote` clients do not.
+  The exposed surface is whatever the app's domains declare via the `AshRemote.Rpc`
+  extension (`rpc do resource … expose :action end end`) — the same set the published
+  manifest describes. `Plug` is referenced only inside the macro expansion, so only the
+  backend using this router needs `plug` — `ash_remote` clients do not.
   """
 
   defmacro __using__(opts) do

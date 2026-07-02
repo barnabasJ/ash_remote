@@ -19,7 +19,8 @@ backend (ash + Ash.Info.Manifest)                 client (ash + ash_remote)
 - The client's `Ash.Query`/changeset is encoded into an RPC body
   (`AshRemote.Encode.{Fields,Filter,Sort,Pagination}`), sent via
   `AshRemote.Transport` (default `Req`), and the response decoded back into resource
-  structs. Relationship, calculation, and aggregate loads fold into the field selection.
+  structs. Calculation and aggregate loads fold into the field selection; relationship
+  loads currently use Ash's batched follow-up reads (one request per relationship).
 - The server is authoritative: generated action stubs carry no changes/validations;
   the backend does the real casting, authorization, and persistence.
 

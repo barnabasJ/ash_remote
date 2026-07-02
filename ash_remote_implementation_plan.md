@@ -19,7 +19,7 @@ actually built. Tests: `mix test` → 1 doctest + 53 tests green; the example cl
 |-------|-------|-------|
 | 0 Foundations & spikes | ✅ done | Reference backend (`test/support/backend`), committed manifest + protocol fixtures. |
 | 1 Transport & protocol | ✅ done | `AshRemote.Transport{,.Req}`, `AshRemote.Protocol`, `AshRemote.Error`, `AshRemote.Formatter`. |
-| 2 Encoding core | ✅ done | `Encode.{Fields,Filter,Sort,Pagination}`, capability-gated. Filter covers the common operators; keyset pagination minimal. |
+| 2 Encoding core | 🟡 partial | `Encode.{Fields,Filter,Sort,Pagination}`. Filter covers the common operators (`==`,`!=`,`in`,`<`,`>`,`<=`,`>=`,`is_nil`) — others raise; unsupported operators aren't gated by `can?` yet, so they raise at build time. Capability **gating exists but isn't auto-populated** from the manifest's per-field `filter_operators` (the `:applicable` option is always nil today). Pagination is offset/limit only (no count/keyset request from the client). |
 | 3 Data layer (walking skeleton) | 🟡 **partial** | Full CRUD + loads round-trip. **Calcs/aggregates fold into one `/rpc/run`; relationships do NOT** — they use Ash's batched separate reads (one `/rpc/run` per relationship, not per row). Single-round-trip relationship folding is **not yet done**. `:transact` → false; bulk → not implemented. |
 | 4 Resource extension & Info | ✅ done | `AshRemote.Resource` (`remote do … end`) + Info + verifier. schema_version verifier is basic (presence, not deep compat). |
 | 5 Manifest ingestion | ✅ done | `AshRemote.Manifest.Loader` + own structs, version-validated. |
