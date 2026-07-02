@@ -6,16 +6,18 @@ config :ash_remote, base_url: System.get_env("TODO_SERVER_URL", "http://127.0.0.
 
 config :todo_client, ash_domains: [TodoClient.Remote.Domain]
 
-# Minimal LiveView endpoint (started explicitly via TodoClient.Web.start/1).
+# Minimal LiveView endpoint. Started by the app supervision tree; it opens a
+# port whenever the app runs (e.g. `mix run --no-halt`) but not under `mix test`.
 config :todo_client, TodoClient.Endpoint,
   adapter: Bandit.PhoenixAdapter,
   url: [host: "localhost"],
+  http: [ip: {127, 0, 0, 1}, port: String.to_integer(System.get_env("WEB_PORT", "4001"))],
   secret_key_base: String.duplicate("todo_client_secret_key_base_0123", 2),
   live_view: [signing_salt: "todocli0"],
   pubsub_server: TodoClient.PubSub,
   check_origin: false,
   debug_errors: true,
-  server: false
+  server: config_env() != :test
 
 config :phoenix, :json_library, Jason
 

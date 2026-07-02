@@ -64,7 +64,7 @@ Two shells:
 cd example/todo_server && mix run --no-halt
 
 # 2) the LiveView client — then open http://localhost:4001
-cd example/todo_client && mix run --no-halt -e "TodoClient.Web.start()"
+cd example/todo_client && mix run --no-halt
 ```
 
 ## Automated end-to-end test (no browser needed)

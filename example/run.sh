@@ -39,4 +39,4 @@ if ! curl -sf "${TODO_SERVER_URL}/health" >/dev/null 2>&1; then
 fi
 
 echo "▶ LiveView client → open http://localhost:${WEB_PORT}  (Ctrl-C to stop)"
-( cd todo_client && mix run --no-halt -e "TodoClient.Web.start(${WEB_PORT})" )
+( cd todo_client && WEB_PORT="$WEB_PORT" mix run --no-halt )

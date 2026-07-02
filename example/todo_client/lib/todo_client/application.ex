@@ -4,7 +4,11 @@ defmodule TodoClient.Application do
 
   @impl true
   def start(_type, _args) do
-    # The LiveView server is started explicitly via `TodoClient.Web.start/1`.
-    Supervisor.start_link([], strategy: :one_for_one, name: TodoClient.Supervisor)
+    children = [
+      {Phoenix.PubSub, name: TodoClient.PubSub},
+      TodoClient.Endpoint
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_one, name: TodoClient.Supervisor)
   end
 end
