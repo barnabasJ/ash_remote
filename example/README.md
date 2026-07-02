@@ -21,7 +21,7 @@ todo_server ──/manifest.json──►  mix ash_remote.gen  ──►  TodoCl
      └──────── /rpc/run ◄──── AshRemote.DataLayer ◄──── TodoClient.Live (AshPhoenix.Form)
 ```
 
-The LiveView calls `Ash.read!/1`, `AshPhoenix.Form.submit/2`, `Ash.update/3`,
+The LiveView calls `Ash.read!/1`, `AshPhoenix.Form.submit/2`, `Ash.update!/2`,
 `Ash.destroy!/1` on the **generated** resources exactly as if they were local —
 `AshRemote.DataLayer` turns each into an HTTP RPC call to `todo_server`.
 

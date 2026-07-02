@@ -6,7 +6,7 @@ defmodule TodoServer.Application do
 
   @impl true
   def start(_type, _args) do
-    port = Application.get_env(:todo_server, :port, 4000)
+    port = Application.get_env(:todo_server, :port, 4010)
 
     children = [
       {Bandit, plug: TodoServer.RpcRouter, port: port}

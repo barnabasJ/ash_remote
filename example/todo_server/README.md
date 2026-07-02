@@ -1,21 +1,8 @@
 # TodoServer
 
-**TODO: Add description**
+The backend for the `ash_remote` example: an Ash app (User/Todo on ETS) that
+declares its RPC-exposed surface with the `AshRemote.Rpc` DSL, mounts
+`AshRemote.Server.Router`, and publishes a JSON `Ash.Info.Manifest` at
+`/manifest.json`.
 
-## Installation
-
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `todo_server` to your list of dependencies in `mix.exs`:
-
-```elixir
-def deps do
-  [
-    {:todo_server, "~> 0.1.0"}
-  ]
-end
-```
-
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/todo_server>.
-
+See `example/README.md` for how to run the monorepo.

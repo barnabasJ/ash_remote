@@ -4,7 +4,7 @@ defmodule TodoClient.LiveTest do
   running in-process. Every assertion is data that round-tripped through the
   generated ash_remote resource → /rpc/run → the todo_server.
 
-  (Interactive rendering is exercised in a browser via `TodoClient.Web.start/1`;
+  (Interactive rendering is exercised in a browser via `mix run --no-halt`;
   `Phoenix.LiveViewTest` needs `lazy_html`, which isn't available offline here,
   so this drives the callbacks directly.)
   """
