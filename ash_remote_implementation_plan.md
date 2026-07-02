@@ -9,6 +9,57 @@ and compile in any Ash app. Igniter keeps regeneration non-destructive.
 
 ---
 
+## Current status
+
+The phase checklists below are the **original plan**. This section records what is
+actually built. Tests: `mix test` → 1 doctest + 53 tests green; the example client
+(`example/todo_client`) → 2 e2e tests green.
+
+| Phase | State | Notes |
+|-------|-------|-------|
+| 0 Foundations & spikes | ✅ done | Reference backend (`test/support/backend`), committed manifest + protocol fixtures. |
+| 1 Transport & protocol | ✅ done | `AshRemote.Transport{,.Req}`, `AshRemote.Protocol`, `AshRemote.Error`, `AshRemote.Formatter`. |
+| 2 Encoding core | ✅ done | `Encode.{Fields,Filter,Sort,Pagination}`, capability-gated. Filter covers the common operators; keyset pagination minimal. |
+| 3 Data layer (walking skeleton) | 🟡 **partial** | Full CRUD + loads round-trip. **Calcs/aggregates fold into one `/rpc/run`; relationships do NOT** — they use Ash's batched separate reads (one `/rpc/run` per relationship, not per row). Single-round-trip relationship folding is **not yet done**. `:transact` → false; bulk → not implemented. |
+| 4 Resource extension & Info | ✅ done | `AshRemote.Resource` (`remote do … end`) + Info + verifier. schema_version verifier is basic (presence, not deep compat). |
+| 5 Manifest ingestion | ✅ done | `AshRemote.Manifest.Loader` + own structs, version-validated. |
+| 6 Code generation | ✅ done | `mix ash_remote.gen` (one `Gen` module, not split files): enums/NewTypes, attrs, calc/agg stubs, relationships, action stubs, `remote` block. **Generic actions not generated.** `--check`/`--dry-run` via Igniter. |
+| 7 Igniter regeneration | ❌ not built | `managed_*` lists are **emitted but unused** — the diff-aware reconciler isn't written; regen overwrites. |
+| 8 Auth/multitenancy/config | ❌ not built | Lazy `base_url` config done; token/actor/tenant propagation and CSRF not done. |
+| 9 Installer, docs, examples | 🟡 partial | Example monorepo built (`example/`): `todo_server` + a **LiveView** `todo_client`. `mix igniter.install` and full docs not done. |
+| 10 Hardening & upstream | ❌ not built | Bulk N-call, keyset edge cases, Channel transport, shared-core extraction pending. |
+
+### Deviations from the original plan (all deliberate)
+
+- **`Ash.Info.Manifest` is ash core, not ash_typescript** (path dep on the local ash
+  checkout, unreleased). One-line fix made there: its JSON serializer now emits the
+  action `name` (see `DECISIONS.md`) — a candidate upstream contribution.
+- **No `ash_typescript` dependency.** The RPC *server* core was ported into `ash_remote`
+  itself — `AshRemote.Server` + `AshRemote.Server.Router` (a `use`-able Plug router) — so a
+  backend needs no custom RPC code. This is the "shared core" the plan slated for later
+  extraction (Phase 10).
+- **Exposure DSL:** `AshRemote.Rpc` — an ash_typescript-style `rpc do resource X do expose
+  :action end end` block; the server + published manifest derive the exposed surface from it.
+- **Action addressing:** the wire identifies actions by `{resource, action}` (both in the
+  manifest) rather than an opaque RPC name (the manifest doesn't serialize one).
+- **No manual actions.** Ash skips the data layer for a no-change update and resets
+  `context.changed?` before commit, so a no-input custom action (e.g. `complete`) can't
+  round-trip from an Ash client. The idiomatic path — change the attribute (`update
+  completed: true`) — is used instead. This is a known limitation of an Ash-on-the-client.
+- **Example client is LiveView, not `mob`.** `mob` renders native UI (no browser) and isn't
+  fetchable offline; the example ships a viewable LiveView over the same generated resources.
+
+### Biggest open item
+
+Single-round-trip **relationship** loading (Phase 3's "one round-trip"). It's not reachable
+via the data-layer callbacks (`transform_query` sees `load: []`; Ash strips relationship loads
+before the fetch). The feasible path is a read **preparation** that captures the load subtree,
+strips relationships so Ash's loader no-ops, folds the tree into the nested wire `fields`, and
+populates it on decode — with a fallback for relationship loads carrying their own
+filter/sort/limit.
+
+---
+
 ## Guiding principles
 
 - **Walking skeleton first.** Get a *hand-written* mirror resource round-tripping against a
@@ -17,8 +68,9 @@ and compile in any Ash app. Igniter keeps regeneration non-destructive.
   without a network. Transport and the data layer wrap them.
 - **Derive, don't hand-maintain.** Capabilities (`can?`, filter/sort pushdown) come from the
   manifest, not a hand-written matrix.
-- **One round-trip.** Relationship loads and calc loads fold into the single `/rpc/run` field
-  selection; no N+1, no separate include calls.
+- **One round-trip.** Calc and aggregate loads fold into the single `/rpc/run` field
+  selection. (Relationship loads currently use Ash's batched separate reads — one request per
+  relationship, not per row; single-request folding is the biggest open item, see status above.)
 - **Server is authoritative.** Client changes/validations are optional and additive; the real
   casting, authorization, and transaction happen server-side. Generated types are *structural
   stand-ins*, not behavioral clones.
