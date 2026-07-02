@@ -31,9 +31,10 @@ actually built. Tests: `mix test` → 1 doctest + 53 tests green; the example cl
 
 ### Deviations from the original plan (all deliberate)
 
-- **`Ash.Info.Manifest` is ash core, not ash_typescript** (path dep on the local ash
-  checkout, unreleased). One-line fix made there: its JSON serializer now emits the
-  action `name` (see `DECISIONS.md`) — a candidate upstream contribution.
+- **`Ash.Info.Manifest` is ash core, not ash_typescript** — and it's in released Ash
+  (>= 3.29), so it's a normal hex dep `{:ash, "~> 3.29"}` (no path dep). Ash's JSON
+  serializer omits the action `name`, so `AshRemote.Server.manifest_json/1` injects it
+  from the `%Manifest{}` struct (see `DECISIONS.md`) — a candidate upstream contribution.
 - **No `ash_typescript` dependency.** The RPC *server* core was ported into `ash_remote`
   itself — `AshRemote.Server` + `AshRemote.Server.Router` (a `use`-able Plug router) — so a
   backend needs no custom RPC code. This is the "shared core" the plan slated for later

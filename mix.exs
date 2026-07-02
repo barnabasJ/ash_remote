@@ -23,8 +23,8 @@ defmodule AshRemote.MixProject do
 
   defp deps do
     [
-      # Ash.Info.Manifest is an unreleased ash-core feature — path dep on the local checkout.
-      {:ash, path: "/home/joba/sandbox/ash"},
+      # Ash.Info.Manifest ships in ash core (>= 3.29).
+      {:ash, "~> 3.29"},
       {:igniter, "~> 0.6"},
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},

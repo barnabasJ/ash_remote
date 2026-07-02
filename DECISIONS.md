@@ -5,16 +5,19 @@
 
 ## Manifest source
 - The rich structural manifest comes from **ash core** `Ash.Info.Manifest`
-  (`generate/1` + `JsonSerializer.to_json/2`, `schema_version` `"1.0.0"`).
-- `Ash.Info.Manifest` is unreleased, so we depend on the local ash checkout via a
-  **path dep** (`/home/joba/sandbox/ash`) until it lands in a hex release.
+  (`generate/1`, `JsonSerializer.to_map/1`, `schema_version` `"1.0.0"`).
+- It ships in released Ash (>= 3.29), so we use a normal hex dep `{:ash, "~> 3.29"}` —
+  no path dep.
 
 ## Protocol
 - We speak the `ash_typescript` RPC wire protocol (`/rpc/run`, `/rpc/validate`).
-- **No `ash_typescript` dependency.** The server-side pipeline/controller is *copied in
-  as a template* under `test/support/backend/rpc/`, written dependency-free so the shared
-  protocol core can later be extracted into a package both `ash_typescript` and
-  `ash_remote` depend on.
+- **No `ash_typescript` dependency.** The server-side RPC core lives in `ash_remote`
+  itself — `AshRemote.Server` + `AshRemote.Server.Router` (a `use`-able Plug router) —
+  ported from ash_typescript and written so it can later be extracted into a shared
+  package both `ash_typescript` and `ash_remote` depend on. A backend needs no custom
+  RPC code: `use AshRemote.Server.Router, otp_app: :my_app`.
+- Exposure is declared with the `AshRemote.Rpc` domain extension (`rpc do resource X do
+  expose :action end end`), the ash_typescript-style counterpart.
 
 ## Architecture
 - Decoupled / manifest-driven: generated resources depend only on `ash` + `ash_remote`.
@@ -25,17 +28,19 @@
 - Igniter is used for non-destructive (re)generation.
 
 ## Wire encoding
+- Actions are addressed by `{resource, action}` (both in the manifest), not an opaque RPC
+  name — the manifest doesn't serialize one.
 - `filter` uses Ash's `filter_input` map form; `sort` uses the `sort_input` string form;
-  pagination is `{limit, offset, keyset}`.
-- Field names are camelCased on the wire by default; `AshRemote.Formatter` maps
-  snake_case ⇄ camelCase on the client, mirrored server-side.
+  pagination is `{limit, offset}` (`offset: 0` is omitted as a no-op).
+- Wire field names are snake_case by default (`AshRemote.Formatter` strategy `:none`);
+  a `:camel` strategy is available for camelCasing backends.
 
-## Upstream change to ash core (local checkout)
-- `Ash.Info.Manifest.JsonSerializer.serialize_action/1` omitted the action `name`,
-  so a client consuming the JSON manifest could not know which action to call.
-  Added `"name" => to_string(action.name)` to the serialized action in the local
-  ash checkout (`lib/ash/info/manifest/json_serializer.ex`). This is the
-  manifest↔protocol seam fix and is a candidate upstream contribution.
+## Manifest action-name gap (handled client-side)
+- Ash's `JsonSerializer` (through at least 3.29.3) omits the action `name` from serialized
+  entrypoints, so a JSON-only client couldn't tell which action to call. The `%Manifest{}`
+  struct *does* carry it, so `AshRemote.Server.manifest_json/1` builds the JSON from
+  `to_map/1` and injects the action `name` into each entrypoint. No ash fork needed; a
+  candidate upstream fix to `serialize_action/1`.
 
 ## Versions
-- Ash 3.29.1 (path dep). Elixir 1.18 / OTP 27.
+- Ash `~> 3.29` (hex, resolved 3.29.3). Elixir 1.18 / OTP 27.

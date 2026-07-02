@@ -41,8 +41,24 @@ defmodule AshRemote.Server do
     {:ok, spec} =
       Ash.Info.Manifest.generate(otp_app: otp_app, action_entrypoints: entrypoints(otp_app))
 
-    {:ok, json} = Ash.Info.Manifest.JsonSerializer.to_json(spec, pretty: true)
-    json
+    spec |> manifest_map() |> Jason.encode!(pretty: true)
+  end
+
+  # Ash's JsonSerializer (through at least 3.29.3) omits the action `name` from
+  # serialized entrypoints, but the %Manifest{} struct carries it — inject it so
+  # the client knows which action to call. (Candidate upstream fix.)
+  defp manifest_map(spec) do
+    map = Ash.Info.Manifest.JsonSerializer.to_map(spec)
+
+    entrypoints =
+      map
+      |> Map.get("entrypoints", [])
+      |> Enum.zip(spec.entrypoints)
+      |> Enum.map(fn {entry, %{action: action}} ->
+        update_in(entry, ["action"], &Map.put(&1, "name", to_string(action.name)))
+      end)
+
+    Map.put(map, "entrypoints", entrypoints)
   end
 
   @doc "Run an action against the exposed resources. Returns the response envelope."
