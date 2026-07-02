@@ -86,6 +86,6 @@ cd todo_server && mix manifest.publish   # writes ../todo_client/priv/manifest.j
 cd ../todo_client && mix remote.gen      # ash_remote.gen → lib/todo_client/remote/*
 ```
 
-> These projects use local path deps to the sibling `ash` and `ash_remote`
-> checkouts (`ash_remote`'s `Ash.Info.Manifest` is unreleased). In this sandbox,
-> fetch deps with `HEX_OFFLINE=1 mix deps.get`.
+> `ash` comes from Hex (`~> 3.29`, for `Ash.Info.Manifest`); `ash_remote` is a
+> relative path dep (`../..`). In this sandbox, fetch deps with
+> `HEX_OFFLINE=1 mix deps.get`.

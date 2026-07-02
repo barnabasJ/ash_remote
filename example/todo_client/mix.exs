@@ -30,11 +30,9 @@ defmodule TodoClient.MixProject do
 
   defp deps do
     [
-      # Same absolute path (with override) that ash_remote uses for ash, so
-      # ash_phoenix's `ash ~> 3.0` requirement resolves against the local checkout.
-      {:ash, path: "/home/joba/sandbox/ash", override: true},
+      {:ash, "~> 3.29"},
       {:ash_phoenix, "~> 2.3"},
-      {:ash_remote, path: "/home/joba/sandbox/ash_remote"},
+      {:ash_remote, path: "../.."},
       {:simple_sat, "~> 0.1"},
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},

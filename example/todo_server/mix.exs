@@ -36,8 +36,7 @@ defmodule TodoServer.MixProject do
 
   defp deps do
     [
-      # Ash.Info.Manifest is an unreleased ash-core feature — path dep on the local checkout.
-      {:ash, path: "/home/joba/sandbox/ash"},
+      {:ash, "~> 3.29"},
       # ash_remote provides the server-side RPC router + manifest (the shared core).
       {:ash_remote, path: "../.."},
       {:simple_sat, "~> 0.1"},
