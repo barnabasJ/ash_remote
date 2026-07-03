@@ -42,6 +42,7 @@ defmodule AshRemote.DataLayer do
   def can?(_resource, :offset), do: true
   def can?(_resource, :select), do: true
   def can?(_resource, :expression_calculation), do: true
+  def can?(_resource, :expression_calculation_sort), do: true
   def can?(_resource, :calculate), do: true
   def can?(_resource, {:aggregate, _kind}), do: true
   def can?(_resource, {:aggregate_relationship, _}), do: true

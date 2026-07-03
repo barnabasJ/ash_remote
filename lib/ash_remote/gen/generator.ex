@@ -308,10 +308,15 @@ defmodule AshRemote.Gen do
     # AshRemote.RemoteCalculation — the server computes; Ash natively
     # refuses filter/sort on expression-less Elixir calculations.
     implementation =
-      if field.expression && AshRemote.Expression.safe?(field.expression) do
-        "expr(#{field.expression})"
-      else
-        "{AshRemote.RemoteCalculation, calc: :#{name}}"
+      cond do
+        field.expression && AshRemote.Expression.safe?(field.expression) ->
+          "expr(#{field.expression})"
+
+        field.arguments == [] ->
+          ~s|expr(remote("#{name}"))|
+
+        true ->
+          "{AshRemote.RemoteCalculation, calc: :#{name}}"
       end
 
     """

@@ -8,3 +8,8 @@ if config_env() == :test do
 end
 
 config :ash, :validate_domain_config_inclusion?, false
+
+# The `remote/1,2` custom expression (see AshRemote.Expressions.Remote). Ash reads
+# `:custom_expressions` at compile time; downstream apps generating clients must
+# register it too (the generator wires this).
+config :ash, :custom_expressions, [AshRemote.Expressions.Remote]
