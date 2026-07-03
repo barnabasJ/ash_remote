@@ -24,7 +24,7 @@ actually built. Tests: `mix test` → 1 doctest + 53 tests green; the example cl
 | 4 Resource extension & Info | ✅ done | `AshRemote.Resource` (`remote do … end`) + Info + verifier. schema_version verifier is basic (presence, not deep compat). |
 | 5 Manifest ingestion | ✅ done | `AshRemote.Manifest.Loader` + own structs, version-validated. |
 | 6 Code generation | ✅ done | `mix ash_remote.gen` (one `Gen` module, not split files): enums/NewTypes, attrs, calc/agg stubs, relationships, action stubs, `remote` block. **Generic actions not generated.** `--check`/`--dry-run` via Igniter. |
-| 7 Igniter regeneration | 🟡 partial | **Non-destructive regen built**: existing modules gain only missing manifest entities (`Ash.Resource.Igniter.add_new_*` / `Ash.Domain.Igniter.add_resource_reference`); user code and edits survive; unchanged manifest → no-op. Ownership = manifest membership (no `managed_*` lists). Not built: detecting changed/removed entities and surfacing them as warnings. |
+| 7 Igniter regeneration | ✅ done | **Non-destructive regen**: existing modules gain only missing manifest entities; user code and edits survive; unchanged manifest → no-op. Ownership = manifest membership (no `managed_*` lists). **Drift detection**: changed/absent entities (incl. stale domain refs) warn by default, `--interactive` resolves per entity. Remaining niceties: schema_version bump handling, whole-module removal detection. |
 | 8 Auth/multitenancy/config | ❌ not built | Lazy `base_url` config done; token/actor/tenant propagation and CSRF not done. |
 | 9 Installer, docs, examples | 🟡 partial | Example monorepo built (`example/`): `todo_server` + a **LiveView** `todo_client`. `mix igniter.install` and full docs not done. |
 | 10 Hardening & upstream | ❌ not built | Bulk N-call, keyset edge cases, Channel transport, shared-core extraction pending. |
@@ -275,13 +275,16 @@ hand-written ones against the live backend.
 - [x] Tests (`test/mix/ash_remote_gen_test.exs`): generate → hand-edit (tweak a generated attribute
       + add a custom action) → regenerate with a changed manifest → user edits survive, missing
       entity added; regen with an unchanged manifest is a no-op.
-- [ ] **Next step:** detect differences instead of ignoring them — entities that *changed* in the
-      manifest (existing definition currently wins) or *disappeared* from it (currently linger) get
-      surfaced as regen warnings, never acted on automatically.
+- [x] Drift detection: entities that *differ* from the manifest or are *absent* from it (incl.
+      stale domain `resource` refs) are surfaced as warnings by default; `--interactive` prompts
+      per entity — keep the current version (default) or take the manifest's (replace/remove).
+      Never acted on automatically.
 - [ ] Handle: `schema_version` bump (warn/refuse), field rename (delete+add, or a rename map).
+- [ ] Whole-module drift: a resource removed from the manifest leaves its generated module file
+      behind (only its domain reference is flagged today).
 
 **Done when:** regeneration preserves user code (✅), is a no-op when nothing changed (✅), and warns
-about drift it can't safely reconcile (pending).
+about drift it can't safely reconcile (✅ — interactive resolution included).
 
 ---
 

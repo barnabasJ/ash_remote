@@ -112,5 +112,11 @@ cd todo_server && mix manifest.publish   # writes ../todo_client/priv/manifest.j
 cd ../todo_client && mix remote.gen      # ash_remote.gen → lib/todo_client/remote/*
 ```
 
+Regeneration is non-destructive: existing modules only gain what the manifest
+added; your own edits and additions are kept. Anything that drifts from the
+manifest (an entity you changed, or one the server removed) is reported as a
+warning — add `--interactive` to `mix ash_remote.gen` to resolve each one
+interactively instead.
+
 > `ash` comes from Hex (`~> 3.29`, for `Ash.Info.Manifest`); `ash_remote` is a
 > relative path dep (`../..`).

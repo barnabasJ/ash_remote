@@ -10,40 +10,43 @@ defmodule Mix.Tasks.AshRemote.GenTest do
   import Igniter.Test
 
   setup_all do
-    # A real manifest published from the reference backend, plus a reduced
-    # variant with one attribute missing — regenerating with the full one
-    # against a project generated from the reduced one must add it back.
+    # A real manifest published from the reference backend, plus reduced
+    # variants: one missing an attribute (regen with the full manifest must add
+    # it back), one missing a loadable field (its stub becomes drift: "removed
+    # on the server").
     full_path = Path.join(System.tmp_dir!(), "ash_remote_gen_full_manifest.json")
     reduced_path = Path.join(System.tmp_dir!(), "ash_remote_gen_reduced_manifest.json")
+    no_calc_path = Path.join(System.tmp_dir!(), "ash_remote_gen_no_calc_manifest.json")
 
     full = AshRemote.Server.manifest_json(:ash_remote)
     File.write!(full_path, full)
 
-    reduced =
-      full
+    drop_todo_field = fn json, field ->
+      json
       |> Jason.decode!()
       |> Map.update!("resources", fn resources ->
         Enum.map(resources, fn
           %{"module" => "AshRemote.Backend.Todo"} = res ->
-            Map.update!(res, "fields", &Map.delete(&1, "due_date"))
+            Map.update!(res, "fields", &Map.delete(&1, field))
 
           res ->
             res
         end)
       end)
       |> Jason.encode!()
+    end
 
-    File.write!(reduced_path, reduced)
-    %{full: full_path, reduced: reduced_path}
+    File.write!(reduced_path, drop_todo_field.(full, "due_date"))
+    File.write!(no_calc_path, drop_todo_field.(full, "comment_count"))
+    %{full: full_path, reduced: reduced_path, no_calc: no_calc_path}
   end
 
-  defp gen(igniter, manifest) do
-    Igniter.compose_task(igniter, "ash_remote.gen", [
-      "--manifest",
-      manifest,
-      "--namespace",
-      "MyApp.Remote"
-    ])
+  defp gen(igniter, manifest, extra_args \\ []) do
+    Igniter.compose_task(
+      igniter,
+      "ash_remote.gen",
+      ["--manifest", manifest, "--namespace", "MyApp.Remote"] ++ extra_args
+    )
   end
 
   defp content(igniter, path) do
@@ -101,5 +104,80 @@ defmodule Mix.Tasks.AshRemote.GenTest do
     |> apply_igniter!()
     |> gen(full)
     |> assert_unchanged()
+  end
+
+  describe "drift" do
+    defp tweak(project, path, from, to) do
+      edited = String.replace(content(project, path), from, to)
+
+      project
+      |> Igniter.update_file(path, &Rewrite.Source.update(&1, :content, edited))
+      |> apply_igniter!()
+    end
+
+    test "is surfaced as warnings by default, changing nothing", %{full: full} do
+      igniter =
+        test_project()
+        |> gen(full)
+        |> apply_igniter!()
+        |> tweak(@todo_path, "attribute(:title, :string", "attribute(:title, :ci_string")
+        |> tweak(@todo_path, "attributes do", "attributes do\n    attribute(:nickname, :string)")
+        |> gen(full)
+
+      assert_has_warning(igniter, &(&1 =~ ~r/:title differs from the manifest/))
+      assert_has_warning(igniter, &(&1 =~ ~r/:nickname is not in the manifest/))
+      assert_unchanged(igniter)
+    end
+
+    test "interactive: a changed entity can be replaced with the manifest version", %{full: full} do
+      project =
+        test_project()
+        |> gen(full)
+        |> apply_igniter!()
+        |> tweak(@todo_path, "attribute(:title, :string", "attribute(:title, :ci_string")
+
+      Mix.shell(Mix.Shell.Process)
+      on_exit(fn -> Mix.shell(Mix.Shell.IO) end)
+      # "Keep the current version?" -> no
+      send(self(), {:mix_shell_input, :prompt, "n"})
+
+      result =
+        project
+        |> gen(full, ["--interactive"])
+        |> apply_igniter!()
+        |> content(@todo_path)
+
+      assert result =~ "attribute(:title, :string"
+      refute result =~ ":ci_string"
+    end
+
+    test "interactive: extras can be kept (user-added) or removed (gone from the server)", %{
+      full: full,
+      no_calc: no_calc
+    } do
+      # Generated from the full manifest, plus a user-added attribute. The new
+      # manifest no longer has :comment_count — as if removed on the server.
+      project =
+        test_project()
+        |> gen(full)
+        |> apply_igniter!()
+        |> tweak(@todo_path, "attributes do", "attributes do\n    attribute(:nickname, :string)")
+
+      Mix.shell(Mix.Shell.Process)
+      on_exit(fn -> Mix.shell(Mix.Shell.IO) end)
+      # attributes are checked before calculations:
+      # :nickname "Keep it?" -> yes; :comment_count "Keep it?" -> no
+      send(self(), {:mix_shell_input, :prompt, "y"})
+      send(self(), {:mix_shell_input, :prompt, "n"})
+
+      result =
+        project
+        |> gen(no_calc, ["--interactive"])
+        |> apply_igniter!()
+        |> content(@todo_path)
+
+      assert result =~ ":nickname"
+      refute result =~ ":comment_count"
+    end
   end
 end

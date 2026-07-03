@@ -62,10 +62,12 @@
   add_new_relationship/add_new_action` (+ `Ash.Domain.Igniter.add_resource_reference` for
   the domain). User edits to generated entities and user-added code are never touched, and
   regen with an unchanged manifest is a no-op (covered by `test/mix/ash_remote_gen_test.exs`).
-- Consequences, both deliberate: an entity that *changes* in the manifest is not updated
-  in place (the existing definition wins — we can't tell generated from user-edited), and
-  an entity that *disappears* from the manifest is not deleted. Next step: detect these
-  differences and surface them as warnings rather than acting on them.
+- Drift is detected but never auto-resolved: an entity that *differs* from the manifest
+  (user edit, or the server changed it) and an entity *absent* from the manifest
+  (user-added, or the server removed it) are indistinguishable cases, so the task
+  surfaces each as a warning by default; `--interactive` prompts per entity — keep the
+  current version (the default answer) or take the manifest's (replace / remove). The
+  same applies to stale `resource` references in the client domain.
 - Upstream note: `Ash.Resource.Igniter.defines_calculation/3` (≤ 3.29.3) only matches
   arity-3 `calculate` calls, missing the `calculate ... do ... end` form — the task carries
   a corrected arity-3-or-4 check; candidate upstream fix.
