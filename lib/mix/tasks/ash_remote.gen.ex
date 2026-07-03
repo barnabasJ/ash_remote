@@ -88,6 +88,7 @@ defmodule Mix.Tasks.AshRemote.Gen do
     igniter
     |> ensure_all(entities.attributes, module, &Ash.Resource.Igniter.add_new_attribute/4)
     |> ensure_all(entities.relationships, module, &Ash.Resource.Igniter.add_new_relationship/4)
+    |> ensure_all(entities.validations, module, &add_new_validation/4)
     |> ensure_all(entities.calculations, module, &add_new_calculation/4)
     |> ensure_all(entities.actions, module, &Ash.Resource.Igniter.add_new_action/4)
   end
@@ -142,6 +143,47 @@ defmodule Mix.Tasks.AshRemote.Gen do
       igniter
     else
       Ash.Resource.Igniter.add_calculation(igniter, module, code)
+    end
+  end
+
+  # Validations have no name to key on — identity is the definition itself.
+  # One that matches a manifest validation node-for-node already exists;
+  # otherwise it's added.
+  defp add_new_validation(igniter, module, _label, code) do
+    {igniter, exists?} = has_equivalent_validation?(igniter, module, code)
+
+    if exists? do
+      igniter
+    else
+      Ash.Resource.Igniter.add_block(igniter, module, :validations, code)
+    end
+  end
+
+  defp has_equivalent_validation?(igniter, module, code) do
+    target = Sourceror.parse_string!(code)
+
+    Spark.Igniter.find(igniter, module, fn _, zipper ->
+      with {:ok, zipper} <- enter_section(zipper, :validations),
+           true <- Enum.any?(statements(zipper), &same_validation?(&1, target)) do
+        {:ok, true}
+      else
+        _ -> :error
+      end
+    end)
+    |> case do
+      {:ok, igniter, _module, _value} -> {igniter, true}
+      {:error, igniter} -> {igniter, false}
+    end
+  end
+
+  # Validations compare by meaning, not text: `string_length(:title, min: 3)`
+  # equals `{Ash.Resource.Validation.StringLength, [min: 3, attribute: :title]}`
+  # whatever the option order. Plain AST equality is the fallback when a
+  # statement can't be safely evaluated.
+  defp same_validation?(stmt, target) do
+    case {AshRemote.Gen.Validations.identity(stmt), AshRemote.Gen.Validations.identity(target)} do
+      {{:ok, left}, {:ok, right}} -> left == right
+      _ -> strip_meta(stmt) == strip_meta(target)
     end
   end
 
@@ -225,7 +267,7 @@ defmodule Mix.Tasks.AshRemote.Gen do
       drift =
         Enum.flat_map(@section_calls, fn {section, calls} ->
           section_drift(zipper, section, calls, Map.fetch!(entities, section))
-        end)
+        end) ++ validations_drift(zipper, entities.validations)
 
       {:ok, drift}
     end)
@@ -274,6 +316,33 @@ defmodule Mix.Tasks.AshRemote.Gen do
   end
 
   defp detect_drift(igniter, _module, %{kind: :type}), do: {igniter, []}
+
+  # Validations are anonymous, so drift is judged by equivalence: any
+  # `validate` in the file that matches no manifest validation is extra.
+  # (An edited one shows up as extra + the manifest version re-added.)
+  defp validations_drift(zipper, manifest_entities) do
+    targets =
+      Enum.map(manifest_entities, fn {_label, code} -> Sourceror.parse_string!(code) end)
+
+    with {:ok, zipper} <- enter_section(zipper, :validations) do
+      zipper
+      |> statements()
+      |> Enum.flat_map(fn
+        {:validate, _, [_ | _]} = stmt ->
+          if Enum.any?(targets, &same_validation?(stmt, &1)) do
+            []
+          else
+            code = Sourceror.to_string(stmt)
+            [%{section: :validations, name: code, kind: :extra, current: code}]
+          end
+
+        _ ->
+          []
+      end)
+    else
+      _ -> []
+    end
+  end
 
   defp section_drift(zipper, section, calls, manifest_entities) do
     with {:ok, zipper} <- enter_section(zipper, section) do
@@ -363,6 +432,18 @@ defmodule Mix.Tasks.AshRemote.Gen do
     """)
   end
 
+  defp keep?(module, %{section: :validations} = finding) do
+    Igniter.Util.IO.yes?("""
+
+    #{inspect(module)}: a validation doesn't match any published by the manifest —
+    either you added or edited it, or it changed on the server.
+
+    #{indent(finding.current)}
+
+    Keep it? (n removes it)
+    """)
+  end
+
   defp keep?(module, %{kind: :extra} = finding) do
     Igniter.Util.IO.yes?("""
 
@@ -378,6 +459,11 @@ defmodule Mix.Tasks.AshRemote.Gen do
   defp warning(module, %{kind: :changed} = finding) do
     "#{inspect(module)}: #{finding.section} entity #{inspect(finding.name)} differs from the " <>
       "manifest (kept as-is — rerun with --interactive to resolve)"
+  end
+
+  defp warning(module, %{section: :validations} = finding) do
+    "#{inspect(module)}: validation `#{finding.current}` doesn't match any published by the " <>
+      "manifest — user-added/edited, or changed on the server (kept as-is — rerun with --interactive to resolve)"
   end
 
   defp warning(module, %{kind: :extra} = finding) do
@@ -399,6 +485,20 @@ defmodule Mix.Tasks.AshRemote.Gen do
         {:ok, Sourceror.Zipper.remove(zipper)}
       end
     end)
+  end
+
+  defp move_to_entity(zipper, %{section: :validations, current: current}) do
+    target = Sourceror.parse_string!(current)
+
+    with {:ok, zipper} <- enter_section(zipper, :validations) do
+      case Sourceror.Zipper.node(zipper) do
+        {:__block__, _, _} ->
+          zipper |> Sourceror.Zipper.down() |> find_sibling(target)
+
+        node ->
+          if same_validation?(node, target), do: {:ok, zipper}, else: :error
+      end
+    end
   end
 
   defp move_to_entity(zipper, %{section: :resources, name: module}) do
@@ -427,6 +527,16 @@ defmodule Mix.Tasks.AshRemote.Gen do
           :error -> {:cont, :error}
         end
       end)
+    end
+  end
+
+  defp find_sibling(nil, _target), do: :error
+
+  defp find_sibling(zipper, target) do
+    if same_validation?(Sourceror.Zipper.node(zipper), target) do
+      {:ok, zipper}
+    else
+      zipper |> Sourceror.Zipper.right() |> find_sibling(target)
     end
   end
 

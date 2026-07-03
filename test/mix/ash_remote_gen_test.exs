@@ -151,6 +151,61 @@ defmodule Mix.Tasks.AshRemote.GenTest do
       refute result =~ ":ci_string"
     end
 
+    test "tuple-form and sugar-form validations are equivalent — no drift", %{full: full} do
+      project = test_project() |> gen(full) |> apply_igniter!()
+
+      # expand the generated sugar into its tuple form, with shuffled orders
+      project =
+        tweak(
+          project,
+          @todo_path,
+          "validate string_length(:title, min: 3)",
+          "validate {Ash.Resource.Validation.StringLength, [min: 3, attribute: :title]}, on: [:update, :create]"
+        )
+
+      project |> gen(full) |> assert_unchanged()
+    end
+
+    test "an edited validation is flagged and the manifest version re-added", %{full: full} do
+      project =
+        test_project()
+        |> gen(full)
+        |> apply_igniter!()
+        |> tweak(@todo_path, "min: 3", "min: 5")
+
+      igniter = gen(project, full)
+
+      assert_has_warning(igniter, &(&1 =~ "doesn't match any published by the manifest"))
+
+      result = igniter |> apply_igniter!() |> content(@todo_path)
+      assert result =~ "min: 5"
+      assert result =~ "min: 3"
+    end
+
+    test "interactive: an edited validation can be dropped for the manifest version", %{
+      full: full
+    } do
+      project =
+        test_project()
+        |> gen(full)
+        |> apply_igniter!()
+        |> tweak(@todo_path, "min: 3", "min: 5")
+
+      Mix.shell(Mix.Shell.Process)
+      on_exit(fn -> Mix.shell(Mix.Shell.IO) end)
+      # the edited validation: "Keep it?" -> no
+      send(self(), {:mix_shell_input, :prompt, "n"})
+
+      result =
+        project
+        |> gen(full, ["--interactive"])
+        |> apply_igniter!()
+        |> content(@todo_path)
+
+      assert result =~ "min: 3"
+      refute result =~ "min: 5"
+    end
+
     test "interactive: extras can be kept (user-added) or removed (gone from the server)", %{
       full: full,
       no_calc: no_calc

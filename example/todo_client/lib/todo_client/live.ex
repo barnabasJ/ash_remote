@@ -64,9 +64,21 @@ defmodule TodoClient.Live do
         </select>
         <button type="submit" style="padding:.4rem .8rem;">Add</button>
       </.form>
+      <%!-- Errors from the mirrored validations — raised client-side, no RPC. --%>
+      <p :for={error <- @form[:title].errors} style="color:#c00; margin:.3rem 0 0;">
+        title {error_text(error)}
+      </p>
     </div>
     """
   end
+
+  defp error_text({message, vars}) do
+    Enum.reduce(vars, message, fn {key, value}, acc ->
+      String.replace(acc, "%{#{key}}", to_string(value))
+    end)
+  end
+
+  defp error_text(message), do: to_string(message)
 
   defp todo_row(assigns) do
     ~H"""

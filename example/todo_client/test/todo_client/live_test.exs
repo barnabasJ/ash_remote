@@ -60,6 +60,17 @@ defmodule TodoClient.LiveTest do
     refute socket.assigns.form.source.valid?
   end
 
+  test "the mirrored string_length validation rejects short titles client-side", %{list: list} do
+    socket = mount() |> event("save", %{"todo" => %{"title" => "ab", "list_id" => list.id}})
+
+    assert assigned_list(socket, list.id).todos == []
+    assert Ash.read!(TodoServer.Todo) == []
+
+    refute socket.assigns.form.source.valid?
+    errors = AshPhoenix.Form.errors(socket.assigns.form.source)
+    assert errors[:title]
+  end
+
   test "relationships, calculation, and aggregates round-trip into assigns", %{list: list} do
     overdue =
       Ash.create!(TodoServer.Todo, %{

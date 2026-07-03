@@ -40,8 +40,17 @@ defmodule AshRemote.Manifest.Resource do
     relationships: %{},
     identities: %{},
     actions: [],
+    validations: [],
     multitenancy: nil
   ]
+end
+
+defmodule AshRemote.Manifest.Validation do
+  @moduledoc false
+  # `opts` (and each where-condition's opts) is Elixir source for a literal
+  # keyword list — see `AshRemote.Literal`.
+  @type t :: %__MODULE__{}
+  defstruct [:module, :opts, :message, on: [], where: [], only_when_valid?: false]
 end
 
 defmodule AshRemote.Manifest.Field do

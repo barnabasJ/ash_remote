@@ -40,6 +40,10 @@ defmodule TodoClient.Remote.Todo do
     )
   end
 
+  validations do
+    validate(string_length(:title, min: 3))
+  end
+
   calculations do
     calculate :overdue?, :boolean, expr(not is_nil(id)) do
       public?(true)

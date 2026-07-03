@@ -82,7 +82,8 @@ defmodule AshRemote.Gen do
 
     attributes = section(:attributes, entities.attributes, always?: true)
     relationships = section(:relationships, entities.relationships, always?: true)
-    calculations = section(:calculations, entities.calculations)
+    validations = section(:validations, entities.validations, gap?: true)
+    calculations = section(:calculations, entities.calculations, gap?: true)
     actions = gen_actions(res)
     remote = gen_remote(res, ctx)
 
@@ -97,7 +98,7 @@ defmodule AshRemote.Gen do
       #{remote}
 
       #{attributes}
-      #{relationships}#{calculations}
+      #{relationships}#{validations}#{calculations}
       #{actions}
       end
       """
@@ -135,10 +136,81 @@ defmodule AshRemote.Gen do
       |> Enum.reject(&(&1.type == :action))
       |> Enum.map(fn action -> {String.to_atom(action.name), action_block(action, res)} end)
 
-    %{attributes: attributes, relationships: relationships, calculations: calculations, actions: actions}
+    %{
+      attributes: attributes,
+      relationships: relationships,
+      validations: validation_entities(res),
+      calculations: calculations,
+      actions: actions
+    }
   end
 
-  defp section(name, entities, opts \\ []) do
+  # The server only publishes validations it deems mirrorable, but a manifest
+  # is input — re-verify here so a crafted one can't inject code into the
+  # generated resource: builtin validation modules only, safe literal opts.
+  @validation_module ~r/^Ash\.Resource\.Validation\.[A-Za-z0-9.]+$/
+
+  defp validation_entities(res) do
+    res.validations
+    |> Enum.filter(&mirrorable_validation?/1)
+    |> Enum.map(fn validation ->
+      line = validation_line(validation)
+      {line, line}
+    end)
+  end
+
+  defp mirrorable_validation?(validation) do
+    safe_ref? = fn %{module: module, opts: opts} ->
+      is_binary(module) and Regex.match?(@validation_module, module) and
+        is_binary(opts) and AshRemote.Literal.safe?(opts)
+    end
+
+    safe_ref?.(validation) and Enum.all?(validation.where, safe_ref?)
+  end
+
+  defp validation_line(validation) do
+    where =
+      case validation.where do
+        [] ->
+          nil
+
+        conditions ->
+          refs = Enum.map_join(conditions, ", ", &validation_ref(&1.module, &1.opts))
+          "where: [#{refs}]"
+      end
+
+    opts =
+      [
+        # [:create, :update] is the DSL default — omit it so the generated
+        # line reads like the hand-written one.
+        validation.on != [:create, :update] && "on: #{inspect(validation.on)}",
+        where,
+        validation.message && "message: #{inspect(validation.message)}",
+        validation.only_when_valid? && "only_when_valid?: true"
+      ]
+      |> Enum.filter(&is_binary/1)
+      |> Enum.join(", ")
+
+    case opts do
+      "" -> "validate #{validation_ref(validation.module, validation.opts)}"
+      opts -> "validate #{validation_ref(validation.module, validation.opts)}, #{opts}"
+    end
+  end
+
+  # Render a validation reference the way the backend author would have
+  # written it — `string_length(:title, min: 3)` — whenever calling that
+  # builtin reproduces the manifest's opts exactly; otherwise fall back to
+  # the always-correct `{Module, opts}` tuple form.
+  defp validation_ref(module_string, opts_code) do
+    with {:ok, opts} <- AshRemote.Literal.eval(opts_code),
+         {:ok, call} <- AshRemote.Gen.Validations.sugar(module_string, opts) do
+      call
+    else
+      _ -> "{#{module_string}, #{opts_code}}"
+    end
+  end
+
+  defp section(name, entities, opts) do
     lines = Enum.map(entities, fn {_name, code} -> indented(code) end)
 
     cond do
@@ -146,7 +218,9 @@ defmodule AshRemote.Gen do
       opts[:always?] -> "  #{name} do\n  end"
       true -> ""
     end
-    |> then(fn body -> if name == :calculations and body != "", do: "\n\n" <> body, else: body end)
+    |> then(fn body ->
+      if opts[:gap?] && body != "", do: "\n\n" <> body, else: body
+    end)
   end
 
   # Single-line entities get standard section indentation; multi-line blocks

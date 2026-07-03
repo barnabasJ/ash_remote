@@ -45,6 +45,9 @@ TodoList
 - **Calculations** — `Todo.overdue?` is a real expression on the server; the
   client stub only knows its name and type, the server supplies the value.
 - **Enum type** — `Priority` round-trips through codegen as a named type.
+- **Validations** — `Todo`'s `string_length(:title, min: 3)` is mirrored onto
+  the generated client resource: the form rejects short titles instantly,
+  client-side, with no RPC; the server still enforces it on every write.
 
 ## Exposing actions (server)
 

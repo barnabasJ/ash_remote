@@ -6,7 +6,7 @@ defmodule AshRemote.Manifest.Loader do
   """
 
   alias AshRemote.Manifest
-  alias AshRemote.Manifest.{Action, Argument, Field, Relationship, Resource, Type}
+  alias AshRemote.Manifest.{Action, Argument, Field, Relationship, Resource, Type, Validation}
 
   @supported_major "1"
 
@@ -113,9 +113,26 @@ defmodule AshRemote.Manifest.Loader do
       fields: normalize_fields(resource["fields"] || %{}),
       relationships: normalize_relationships(resource["relationships"] || %{}),
       identities: normalize_identities(resource["identities"] || %{}),
+      validations: normalize_validations(resource["validations"] || []),
       multitenancy: resource["multitenancy"],
       actions: Map.get(actions_by_resource, module, [])
     }
+  end
+
+  defp normalize_validations(validations) do
+    Enum.map(validations, fn validation ->
+      %Validation{
+        module: validation["module"],
+        opts: validation["opts"],
+        on: Enum.map(validation["on"] || [], &atom/1),
+        where:
+          Enum.map(validation["where"] || [], fn condition ->
+            %{module: condition["module"], opts: condition["opts"]}
+          end),
+        message: validation["message"],
+        only_when_valid?: validation["only_when_valid"] || false
+      }
+    end)
   end
 
   defp normalize_fields(fields) do

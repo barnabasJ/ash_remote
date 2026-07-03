@@ -48,6 +48,12 @@ MyApp.Remote.Todo
 |> Ash.read!()
 ```
 
+Validations declared on backend resources are mirrored onto the generated
+client resources when they're expressible as data (builtin validations with
+literal options, including `where`-guarded ones) — so forms and changesets
+fail fast client-side, while the server re-validates every write. Changes and
+lifecycle hooks are never mirrored; they run only on the server.
+
 Debug the wire traffic by logging every RPC request (URL, resource/action,
 outcome, duration, request/response bodies):
 

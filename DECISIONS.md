@@ -72,6 +72,32 @@
   arity-3 `calculate` calls, missing the `calculate ... do ... end` form — the task carries
   a corrected arity-3-or-4 check; candidate upstream fix.
 
+## Validation mirroring (client-side validation without a round trip)
+- Ash core's manifest serializes no validations, so `AshRemote.Server.manifest_json/1`
+  publishes them itself (same augmentation channel as action names and relationship
+  attributes): each resource gets a `"validations"` list of `{module, opts, on, where,
+  message, only_when_valid}` entries.
+- **Mirrorable** = builtin data-check module (allowlist in `server.ex`) + opts that
+  round-trip as safe literals (`AshRemote.Literal`: inspect → parse → literal-only AST,
+  with `{Spark.Regex, :cache, [...]}` as the single allowed call shape — how `~r//` is
+  stored). `where` conditions are the same `{module, opts}` shape and mirror under the
+  same recursive test — a `where` does NOT disqualify a validation. Function validations,
+  custom modules, and non-literal opts are skipped: the server stays authoritative.
+- Opts travel as Elixir source strings (JSON-safe, exact fidelity for atoms/keywords);
+  the generator re-verifies module namespace + literal safety before emitting anything —
+  a crafted manifest can't inject code into generated resources.
+- Generated validations are rendered as the `Builtins` sugar the backend author wrote
+  (`validate string_length(:title, min: 3)`, default `on:` omitted) whenever *calling the
+  builtin reproduces the manifest opts exactly* (`AshRemote.Gen.Validations.sugar/2` —
+  lossy rendering is impossible by construction); otherwise the `{Module, opts}` tuple
+  form. Regen/drift compare by canonical identity (`identity/1`): sugar vs tuple form,
+  option order, and `~r//` vs Spark's lazy regex tuple are all equivalent.
+- Changes/lifecycle hooks remain server-only by construction (action stubs carry none);
+  mirrored validations run on both sides — client for fast feedback, server for truth.
+- Regen identity for validations is node equivalence (they have no name): a matching
+  `validate` already exists → skip; an edited one is flagged as drift and the manifest
+  version re-added.
+
 ## Reads with `limit` against non-paginated backend actions
 - The client encodes query `limit`/`offset` as the wire `page` — but `Ash.get/2` reads
   with an internal `limit: 2`, and a backend read action without `pagination` enabled

@@ -65,12 +65,73 @@ defmodule AshRemote.Server do
       |> Map.get("resources", [])
       |> Enum.zip(spec.resources)
       |> Enum.map(fn {entry, %{module: module}} ->
-        Map.update(entry, "relationships", %{}, &inject_relationship_attributes(&1, module))
+        entry
+        |> Map.update("relationships", %{}, &inject_relationship_attributes(&1, module))
+        |> Map.put("validations", serialize_validations(module))
       end)
 
     map
     |> Map.put("entrypoints", entrypoints)
     |> Map.put("resources", resources)
+  end
+
+  # Mirrorable global validations, published so the client can validate
+  # without a round trip. A validation mirrors when its module is a builtin
+  # data check, its opts encode as safe literals, and every `where` condition
+  # passes the same test — anything else (function validations, custom
+  # modules, non-literal opts) is skipped: the server stays authoritative.
+  @mirrorable_validations Enum.map(
+                            ~w(ActionIs ArgumentDoesNotEqual ArgumentEquals ArgumentIn
+                               AttributeDoesNotEqual AttributeEquals AttributeIn
+                               AttributesPresent ByteSize Changing Compare Confirm
+                               Match OneOf Present StringLength),
+                            &Module.concat(Ash.Resource.Validation, &1)
+                          )
+
+  defp serialize_validations(module) do
+    module
+    |> Ash.Resource.Info.validations()
+    |> Enum.flat_map(&serialize_validation/1)
+  end
+
+  defp serialize_validation(%Ash.Resource.Validation{validation: {module, opts}} = validation)
+       when module in @mirrorable_validations do
+    with {:ok, opts_code} <- AshRemote.Literal.encode(opts),
+         {:ok, where} <- serialize_where(validation.where),
+         true <- is_nil(validation.message) or is_binary(validation.message) do
+      [
+        %{
+          "module" => inspect(module),
+          "opts" => opts_code,
+          "on" => Enum.map(validation.on, &to_string/1),
+          "where" => where,
+          "message" => validation.message,
+          "only_when_valid" => validation.only_when_valid? || false
+        }
+      ]
+    else
+      _ -> []
+    end
+  end
+
+  defp serialize_validation(_validation), do: []
+
+  defp serialize_where(conditions) do
+    conditions
+    |> Enum.reduce_while([], fn
+      {module, opts}, acc when module in @mirrorable_validations ->
+        case AshRemote.Literal.encode(opts) do
+          {:ok, code} -> {:cont, [%{"module" => inspect(module), "opts" => code} | acc]}
+          :error -> {:halt, :error}
+        end
+
+      _other, _acc ->
+        {:halt, :error}
+    end)
+    |> case do
+      :error -> :error
+      acc -> {:ok, Enum.reverse(acc)}
+    end
   end
 
   defp inject_relationship_attributes(relationships, module) do

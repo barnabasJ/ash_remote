@@ -2737,7 +2737,20 @@
           "source_attribute": "id",
           "type": "has_many"
         }
-      }
+      },
+      "validations": [
+        {
+          "message": null,
+          "module": "Ash.Resource.Validation.StringLength",
+          "on": [
+            "create",
+            "update"
+          ],
+          "only_when_valid": false,
+          "opts": "[min: 3, attribute: :title]",
+          "where": []
+        }
+      ]
     },
     {
       "embedded": false,
@@ -3119,7 +3132,8 @@
           "source_attribute": "user_id",
           "type": "belongs_to"
         }
-      }
+      },
+      "validations": []
     },
     {
       "embedded": false,
@@ -3358,7 +3372,8 @@
           "source_attribute": "id",
           "type": "has_many"
         }
-      }
+      },
+      "validations": []
     }
   ],
   "schema_version": "1.0.0",

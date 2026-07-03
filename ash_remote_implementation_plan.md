@@ -72,9 +72,10 @@ filter/sort/limit.
 - **One round-trip.** Calc and aggregate loads fold into the single `/rpc/run` field
   selection. (Relationship loads currently use Ash's batched separate reads — one request per
   relationship, not per row; single-request folding is the biggest open item, see status above.)
-- **Server is authoritative.** Client changes/validations are optional and additive; the real
-  casting, authorization, and transaction happen server-side. Generated types are *structural
-  stand-ins*, not behavioral clones.
+- **Server is authoritative.** Client-side validations are mirrored from the manifest when
+  they're expressible as data (builtin modules, literal opts, mirrorable `where` conditions) —
+  fast feedback only; the real casting, authorization, changes/hooks, and transaction happen
+  server-side. Generated types are *structural stand-ins*, not behavioral clones.
 
 ---
 

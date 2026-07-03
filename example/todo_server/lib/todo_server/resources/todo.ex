@@ -21,6 +21,12 @@ defmodule TodoServer.Todo do
     has_many :subtasks, TodoServer.Todo, public?: true, destination_attribute: :parent_id
   end
 
+  validations do
+    # Mirrored onto the generated client resource: forms validate this
+    # without a round trip; the server still enforces it on every write.
+    validate string_length(:title, min: 3)
+  end
+
   calculations do
     calculate :overdue?,
               :boolean,

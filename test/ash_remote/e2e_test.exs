@@ -126,4 +126,20 @@ defmodule AshRemote.E2ETest do
     %{todo: todo} = seed()
     assert Ash.get!(mod(:Todo), todo.id).id == todo.id
   end
+
+  test "mirrored validations run client-side, without a round trip" do
+    # Unreachable backend: if the error is a validation error (not a transport
+    # error), it was produced client-side before any HTTP request.
+    Application.put_env(:ash_remote, :base_url, "http://127.0.0.1:1")
+
+    assert {:error, %Ash.Error.Invalid{} = error} = Ash.create(mod(:Todo), %{title: "ab"})
+    assert Exception.message(error) =~ "must have length of at least 3"
+
+    assert {:error, %Ash.Error.Invalid{} = error} = Ash.create(mod(:Todo), %{title: "!nope"})
+    assert Exception.message(error) =~ "must match"
+  end
+
+  test "valid input passes the mirrored validations and round-trips" do
+    assert %{title: "Big"} = Ash.create!(mod(:Todo), %{title: "Big"})
+  end
 end

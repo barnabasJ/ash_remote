@@ -45,6 +45,19 @@ defmodule AshRemote.Backend.Todo do
     end
   end
 
+  validations do
+    # Mirrorable: builtin modules, literal opts — published in the manifest.
+    validate string_length(:title, min: 3)
+    validate match(:title, ~r/^[^!]/)
+
+    # Mirrorable including its `where`: conditions are the same {module, opts}
+    # shape as validations and round-trip when they pass the same test.
+    validate present(:title), where: [changing(:title)]
+
+    # Not mirrorable (function validation): must be skipped by publishing.
+    validate fn changeset, _context -> :ok end
+  end
+
   calculations do
     # Calculation WITHOUT an argument (expression).
     calculate :is_overdue,
