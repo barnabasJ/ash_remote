@@ -24,7 +24,7 @@ actually built. Tests: `mix test` → 1 doctest + 53 tests green; the example cl
 | 4 Resource extension & Info | ✅ done | `AshRemote.Resource` (`remote do … end`) + Info + verifier. schema_version verifier is basic (presence, not deep compat). |
 | 5 Manifest ingestion | ✅ done | `AshRemote.Manifest.Loader` + own structs, version-validated. |
 | 6 Code generation | ✅ done | `mix ash_remote.gen` (one `Gen` module, not split files): enums/NewTypes, attrs, calc/agg stubs, relationships, action stubs, `remote` block. **Generic actions not generated.** `--check`/`--dry-run` via Igniter. |
-| 7 Igniter regeneration | ❌ not built | Ownership model decided: **managed = whatever the manifest declares** (recomputed at regen time, no `managed_*` bookkeeping lists); anything else in the file is user-owned and ignored. The diff-aware reconciler isn't written; regen overwrites. |
+| 7 Igniter regeneration | 🟡 partial | **Non-destructive regen built**: existing modules gain only missing manifest entities (`Ash.Resource.Igniter.add_new_*` / `Ash.Domain.Igniter.add_resource_reference`); user code and edits survive; unchanged manifest → no-op. Ownership = manifest membership (no `managed_*` lists). Not built: detecting changed/removed entities and surfacing them as warnings. |
 | 8 Auth/multitenancy/config | ❌ not built | Lazy `base_url` config done; token/actor/tenant propagation and CSRF not done. |
 | 9 Installer, docs, examples | 🟡 partial | Example monorepo built (`example/`): `todo_server` + a **LiveView** `todo_client`. `mix igniter.install` and full docs not done. |
 | 10 Hardening & upstream | ❌ not built | Bulk N-call, keyset edge cases, Channel transport, shared-core extraction pending. |
@@ -263,20 +263,25 @@ hand-written ones against the live backend.
 
 ## Phase 7 — Igniter intelligent regeneration
 
-- [ ] Make the generator diff-aware. For an existing generated module, locate each DSL section via
-      zipper and reconcile **only manifest-declared entities** by name (add new, update changed) while
-      never touching user-added actions, changes, preparations, helpers, or extra code.
-- [ ] Ownership = manifest membership, recomputed at regen time — no persisted `managed_*` lists.
+- [x] Non-destructive regen: an existing module gains only the manifest entities it's missing,
+      via `Ash.Resource.Igniter.add_new_attribute/add_new_relationship/add_new_action` and
+      `Ash.Domain.Igniter.add_resource_reference` — no bespoke diff engine. User-added actions,
+      changes, preparations, helpers, and edits to generated entities are never touched.
+      (Calculations use a local arity-3-or-4 `defines_calculation` check — Ash's misses the
+      `calculate ... do` form; candidate upstream fix.)
+- [x] Ownership = manifest membership, recomputed at regen time — no persisted `managed_*` lists.
       Entities present in the file but absent from the manifest are treated as user-owned and left
-      alone; regen **warns** about ones that look stale instead of deleting them.
-- [ ] Handle: `schema_version` bump (warn/refuse), field rename (delete+add, or a rename map),
-      removed exposed action (drop the stub unless the user customized it → then warn, don't clobber).
-- [ ] Tests: generate → hand-edit (add a custom action + a client-side change + a helper fn) →
-      regenerate with a changed manifest (add attr, remove attr, change a type) → assert user edits
-      survive and managed sections updated. Assert idempotency when the manifest is unchanged.
+      alone.
+- [x] Tests (`test/mix/ash_remote_gen_test.exs`): generate → hand-edit (tweak a generated attribute
+      + add a custom action) → regenerate with a changed manifest → user edits survive, missing
+      entity added; regen with an unchanged manifest is a no-op.
+- [ ] **Next step:** detect differences instead of ignoring them — entities that *changed* in the
+      manifest (existing definition currently wins) or *disappeared* from it (currently linger) get
+      surfaced as regen warnings, never acted on automatically.
+- [ ] Handle: `schema_version` bump (warn/refuse), field rename (delete+add, or a rename map).
 
-**Done when:** regeneration preserves user code, reconciles managed sections correctly, and is a no-op
-when nothing changed.
+**Done when:** regeneration preserves user code (✅), is a no-op when nothing changed (✅), and warns
+about drift it can't safely reconcile (pending).
 
 ---
 

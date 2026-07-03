@@ -22,7 +22,7 @@ defmodule AshRemote.E2ETest do
     modules = AshRemote.Gen.generate(manifest, namespace: @namespace)
 
     # Compile the generated resources (the "compiles anywhere" guarantee).
-    source = modules |> Enum.map(fn {_m, s} -> s end) |> Enum.join("\n")
+    source = modules |> Enum.map(& &1.source) |> Enum.join("\n")
     Code.compile_string(source)
 
     :ok

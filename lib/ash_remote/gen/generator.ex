@@ -2,12 +2,15 @@ defmodule AshRemote.Gen do
   @moduledoc """
   Turns an `AshRemote.Manifest` into standalone Ash resource source code.
 
-  `generate/2` returns a list of `{module_name_string, source_string}`:
+  `generate/2` returns one map per generated module:
 
-    * one module per named type (`Ash.Type.Enum` / `Ash.Type.NewType`)
-    * one module per resource (attributes, relationships, calc/aggregate stubs,
-      action stubs, and a `remote` block), backed by `AshRemote.DataLayer`
-    * a client domain listing the resources
+    * `kind: :type` — one module per named type (`Ash.Type.Enum` / `Ash.Type.NewType`)
+    * `kind: :resource` — one module per resource (attributes, relationships,
+      calc/aggregate stubs, action stubs, and a `remote` block), backed by
+      `AshRemote.DataLayer`. Carries `entities:` — per-section `{name, code}`
+      snippets so regeneration can add missing entities to an existing module
+      instead of rewriting it.
+    * `kind: :domain` — a client domain listing the resources (in `resources:`)
 
   Backend module names are re-namespaced under `:namespace` by stripping the
   longest common prefix. Aggregates and calculations are both emitted as
@@ -18,7 +21,14 @@ defmodule AshRemote.Gen do
 
   alias AshRemote.Manifest
 
-  @doc "Generate `[{module_string, source_string}]` from a manifest."
+  @doc """
+  Generate module definitions from a manifest.
+
+  Returns a list of `%{module: String.t(), kind: :type | :resource | :domain,
+  source: String.t()}` maps; `:resource` entries also carry `entities:`
+  (`%{attributes | relationships | calculations | actions => [{name, code}]}`)
+  and the `:domain` entry carries `resources:` (client module strings).
+  """
   def generate(%Manifest{} = manifest, opts) do
     namespace = Keyword.fetch!(opts, :namespace)
     domain = opts[:domain] || namespace <> ".Domain"
@@ -61,18 +71,18 @@ defmodule AshRemote.Gen do
           "  use Ash.Type.NewType, subtype_of: #{inspect(subtype)}"
       end
 
-    {module, "defmodule #{module} do\n#{body}\nend\n"}
+    %{module: module, kind: :type, source: "defmodule #{module} do\n#{body}\nend\n"}
   end
 
   # --- resources -----------------------------------------------------------
 
   defp gen_resource(res, ctx) do
     module = client_module(res.module, ctx)
-    fk_names = belongs_to_fks(res)
+    entities = resource_entities(res, ctx)
 
-    attributes = gen_attributes(res, fk_names, ctx)
-    relationships = gen_relationships(res, ctx)
-    calculations = gen_calculations(res, ctx)
+    attributes = section(:attributes, entities.attributes, always?: true)
+    relationships = section(:relationships, entities.relationships, always?: true)
+    calculations = section(:calculations, entities.calculations)
     actions = gen_actions(res)
     remote = gen_remote(res, ctx)
 
@@ -92,8 +102,61 @@ defmodule AshRemote.Gen do
       end
       """
 
-    {module, source}
+    %{module: module, kind: :resource, source: source, entities: entities}
   end
+
+  # Per-section `{name, code}` snippets — the unit of non-destructive
+  # regeneration: an existing module gets the entities it's missing, by name.
+  defp resource_entities(res, ctx) do
+    fk_names = belongs_to_fks(res)
+    pk = List.first(res.primary_key) || :id
+
+    attributes =
+      res
+      |> attribute_fields()
+      |> Enum.reject(fn {name, _f} -> String.to_atom(name) in fk_names end)
+      |> Enum.map(fn {name, field} -> {String.to_atom(name), attribute_line(name, field, ctx)} end)
+
+    relationships =
+      res.relationships
+      |> Enum.sort_by(fn {name, _} -> name end)
+      |> Enum.map(fn {name, rel} -> {String.to_atom(name), relationship_line(name, rel, ctx)} end)
+      |> Enum.reject(fn {_name, line} -> line == "" end)
+
+    calculations =
+      res
+      |> loadable_fields()
+      |> Enum.map(fn {name, field} ->
+        {String.to_atom(name), calculation_block(name, field, pk, ctx)}
+      end)
+
+    actions =
+      res.actions
+      |> Enum.reject(&(&1.type == :action))
+      |> Enum.map(fn action -> {String.to_atom(action.name), action_block(action, res)} end)
+
+    %{attributes: attributes, relationships: relationships, calculations: calculations, actions: actions}
+  end
+
+  defp section(name, entities, opts \\ []) do
+    lines = Enum.map(entities, fn {_name, code} -> indented(code) end)
+
+    cond do
+      lines != [] -> "  #{name} do\n#{Enum.join(lines, joiner(name))}\n  end"
+      opts[:always?] -> "  #{name} do\n  end"
+      true -> ""
+    end
+    |> then(fn body -> if name == :calculations and body != "", do: "\n\n" <> body, else: body end)
+  end
+
+  # Single-line entities get standard section indentation; multi-line blocks
+  # (calculations) already carry their own.
+  defp indented(code) do
+    if String.contains?(code, "\n"), do: code, else: "    " <> code
+  end
+
+  defp joiner(:calculations), do: "\n\n"
+  defp joiner(_), do: "\n"
 
   defp gen_remote(res, ctx) do
     base =
@@ -106,16 +169,6 @@ defmodule AshRemote.Gen do
     #{base}  end
     """
     |> String.trim_trailing()
-  end
-
-  defp gen_attributes(res, fk_names, ctx) do
-    lines =
-      res
-      |> attribute_fields()
-      |> Enum.reject(fn {name, _f} -> String.to_atom(name) in fk_names end)
-      |> Enum.map(fn {name, field} -> "    " <> attribute_line(name, field, ctx) end)
-
-    "  attributes do\n#{Enum.join(lines, "\n")}\n  end"
   end
 
   defp attribute_line(name, field, ctx) do
@@ -134,20 +187,6 @@ defmodule AshRemote.Gen do
         required? = field.allow_nil? == false and not field.has_default?
         opts = ", public?: true" <> if(required?, do: ", allow_nil?: false", else: "")
         "attribute #{atom}, #{render_type(field.type, ctx)}#{opts}"
-    end
-  end
-
-  defp gen_relationships(res, ctx) do
-    lines =
-      res.relationships
-      |> Enum.sort_by(fn {name, _} -> name end)
-      |> Enum.map(fn {name, rel} -> "    " <> relationship_line(name, rel, ctx) end)
-      |> Enum.reject(&(&1 == "    "))
-
-    if lines == [] do
-      "  relationships do\n  end"
-    else
-      "  relationships do\n#{Enum.join(lines, "\n")}\n  end"
     end
   end
 
@@ -178,21 +217,6 @@ defmodule AshRemote.Gen do
     [source_attribute: rel.source_attribute, destination_attribute: rel.destination_attribute]
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Enum.map_join(fn {key, value} -> ", #{key}: :#{value}" end)
-  end
-
-  defp gen_calculations(res, ctx) do
-    pk = List.first(res.primary_key) || :id
-
-    calcs =
-      res
-      |> loadable_fields()
-      |> Enum.map(fn {name, field} -> calculation_block(name, field, pk, ctx) end)
-
-    if calcs == [] do
-      ""
-    else
-      "\n\n  calculations do\n#{Enum.join(calcs, "\n\n")}\n  end"
-    end
   end
 
   defp calculation_block(name, field, pk, ctx) do
@@ -276,7 +300,8 @@ defmodule AshRemote.Gen do
       |> Map.keys()
       |> Enum.map(&client_module(&1, ctx))
       |> Enum.sort()
-      |> Enum.map_join("\n", &"    resource #{&1}")
+
+    resource_lines = Enum.map_join(resources, "\n", &"    resource #{&1}")
 
     source =
       """
@@ -284,12 +309,12 @@ defmodule AshRemote.Gen do
         use Ash.Domain, validate_config_inclusion?: false
 
         resources do
-      #{resources}
+      #{resource_lines}
         end
       end
       """
 
-    {ctx.domain, source}
+    %{module: ctx.domain, kind: :domain, source: source, resources: resources}
   end
 
   # --- field helpers -------------------------------------------------------

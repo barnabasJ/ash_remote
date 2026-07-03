@@ -55,10 +55,20 @@
 ## Regeneration ownership model (no `managed_*` lists)
 - The generator does not persist per-resource `managed_*` bookkeeping in the `remote` block.
   Ownership is defined by **manifest membership**, recomputed at regen time: entities the
-  manifest declares are generator-owned and get reconciled; anything else in the file is
-  user-added and ignored. Consequence: an entity that disappears from the manifest is not
-  auto-deleted (indistinguishable from user code) — the future reconciler should warn about
-  such likely-stale entities instead of clobbering them.
+  manifest declares are generator-owned; anything else in the file is user-added and ignored.
+- `mix ash_remote.gen` implements this with the stock Igniter composition, not a bespoke
+  diff engine: a module that doesn't exist is created whole; an existing module gains only
+  the manifest entities it's missing, via `Ash.Resource.Igniter.add_new_attribute/
+  add_new_relationship/add_new_action` (+ `Ash.Domain.Igniter.add_resource_reference` for
+  the domain). User edits to generated entities and user-added code are never touched, and
+  regen with an unchanged manifest is a no-op (covered by `test/mix/ash_remote_gen_test.exs`).
+- Consequences, both deliberate: an entity that *changes* in the manifest is not updated
+  in place (the existing definition wins — we can't tell generated from user-edited), and
+  an entity that *disappears* from the manifest is not deleted. Next step: detect these
+  differences and surface them as warnings rather than acting on them.
+- Upstream note: `Ash.Resource.Igniter.defines_calculation/3` (≤ 3.29.3) only matches
+  arity-3 `calculate` calls, missing the `calculate ... do ... end` form — the task carries
+  a corrected arity-3-or-4 check; candidate upstream fix.
 
 ## Reads with `limit` against non-paginated backend actions
 - The client encodes query `limit`/`offset` as the wire `page` — but `Ash.get/2` reads
