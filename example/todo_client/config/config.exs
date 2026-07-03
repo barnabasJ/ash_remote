@@ -4,6 +4,11 @@ import Config
 # resolved lazily at call time so one build works across environments.
 config :ash_remote, base_url: System.get_env("TODO_SERVER_URL", "http://127.0.0.1:4010")
 
+# Log every RPC the client makes (URL, resource/action, outcome, duration,
+# request/response bodies) — Ecto-style visibility into the wire traffic.
+# Off under test only to keep test output readable.
+config :ash_remote, debug_requests: config_env() != :test
+
 config :todo_client, ash_domains: [TodoClient.Remote.Domain]
 
 # Minimal LiveView endpoint. Started by the app supervision tree; it opens a

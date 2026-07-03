@@ -39,4 +39,51 @@ defmodule AshRemote.TransportTest do
     body = Protocol.build_run(%{resource: "R", action: "read"})
     assert {:error, {:transport_error, _}} = Transport.Req.request(config, :run, body)
   end
+
+  describe "debug_requests" do
+    import ExUnit.CaptureLog
+
+    setup do
+      on_exit(fn -> Application.delete_env(:ash_remote, :debug_requests) end)
+    end
+
+    test "logs every request with outcome and bodies when enabled", %{config: config} do
+      Application.put_env(:ash_remote, :debug_requests, true)
+
+      body =
+        Protocol.build_run(%{
+          resource: "AshRemote.Backend.User",
+          action: "create",
+          input: %{"name" => "Ada", "email" => "ada@example.com"},
+          fields: ["id", "name"]
+        })
+
+      log = capture_log(fn -> Transport.Req.request(config, :run, body) end)
+
+      assert log =~ "ash_remote: POST"
+      assert log =~ "/rpc/run AshRemote.Backend.User.create → ok"
+      assert log =~ "request:  %{"
+      assert log =~ ~s("action" => "create")
+      assert log =~ "response: %{"
+      assert log =~ ~s("success" => true)
+    end
+
+    test "logs transport errors when enabled" do
+      Application.put_env(:ash_remote, :debug_requests, true)
+      config = Config.new(base_url: "http://127.0.0.1:1", receive_timeout: 200)
+      body = Protocol.build_run(%{resource: "R", action: "read"})
+
+      log = capture_log(fn -> Transport.Req.request(config, :run, body) end)
+
+      assert log =~ "R.read → transport error:"
+    end
+
+    test "is silent by default", %{config: config} do
+      body = Protocol.build_run(%{resource: "AshRemote.Backend.User", action: "read"})
+
+      log = capture_log(fn -> Transport.Req.request(config, :run, body) end)
+
+      refute log =~ "ash_remote: POST"
+    end
+  end
 end

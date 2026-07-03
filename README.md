@@ -48,6 +48,20 @@ MyApp.Remote.Todo
 |> Ash.read!()
 ```
 
+Debug the wire traffic by logging every RPC request (URL, resource/action,
+outcome, duration, request/response bodies):
+
+```elixir
+# config/dev.exs
+config :ash_remote, debug_requests: true
+```
+
+```
+[debug] ash_remote: POST http://127.0.0.1:4010/rpc/run TodoServer.Todo.read → ok (4.2ms)
+request:  %{"action" => "read", ...}
+response: %{"data" => [...], "success" => true}
+```
+
 ## Layout
 
 | Path | What |
