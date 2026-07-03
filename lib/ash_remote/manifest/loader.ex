@@ -174,6 +174,8 @@ defmodule AshRemote.Manifest.Loader do
          cardinality: atom(rel["cardinality"]),
          destination: rel["destination"],
          description: rel["description"],
+         source_attribute: atom(rel["source_attribute"]),
+         destination_attribute: atom(rel["destination_attribute"]),
          allow_nil?: rel["allow_nil"]
        }}
     end)

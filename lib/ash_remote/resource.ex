@@ -44,20 +44,7 @@ defmodule AshRemote.Resource do
         type: :string,
         required: false,
         doc: "A hash of the source manifest resource, for regeneration bookkeeping."
-      ],
-      managed_attributes: [type: {:list, :atom}, default: [], doc: "Generator-owned attributes."],
-      managed_relationships: [
-        type: {:list, :atom},
-        default: [],
-        doc: "Generator-owned relationships."
-      ],
-      managed_calculations: [
-        type: {:list, :atom},
-        default: [],
-        doc: "Generator-owned calculations."
-      ],
-      managed_aggregates: [type: {:list, :atom}, default: [], doc: "Generator-owned aggregates."],
-      managed_actions: [type: {:list, :atom}, default: [], doc: "Generator-owned actions."]
+      ]
     ]
   }
 

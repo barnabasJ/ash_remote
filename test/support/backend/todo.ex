@@ -25,6 +25,18 @@ defmodule AshRemote.Backend.Todo do
     end
 
     has_many :comments, AshRemote.Backend.Comment, public?: true
+
+    # Self-referential, with a FK that name-based inference can't guess —
+    # exercises the manifest's source/destination attribute round-trip.
+    belongs_to :parent, AshRemote.Backend.Todo do
+      public? true
+      attribute_writable? true
+    end
+
+    has_many :subtasks, AshRemote.Backend.Todo do
+      public? true
+      destination_attribute :parent_id
+    end
   end
 
   aggregates do
@@ -53,7 +65,7 @@ defmodule AshRemote.Backend.Todo do
   end
 
   actions do
-    default_accept [:title, :completed, :status, :priority_score, :due_date, :user_id]
+    default_accept [:title, :completed, :status, :priority_score, :due_date, :user_id, :parent_id]
 
     read :read do
       primary? true

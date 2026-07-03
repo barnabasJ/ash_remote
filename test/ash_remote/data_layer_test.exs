@@ -108,4 +108,14 @@ defmodule AshRemote.DataLayerTest do
     assert %Todo{id: id} = Ash.get!(Todo, todo.id)
     assert id == todo.id
   end
+
+  # User's backend read has no pagination — Ash.get/2's internal `limit: 2`
+  # must land as a plain query limit, not a page option, on such actions.
+  test "get and limit work against a backend read without pagination" do
+    %{user: user} = seed()
+    assert %User{name: "Ada"} = Ash.get!(User, user.id)
+
+    Ash.create!(User, %{name: "Grace", email: "grace@example.com"})
+    assert [_only_one] = User |> Ash.Query.limit(1) |> Ash.read!()
+  end
 end

@@ -71,6 +71,29 @@ defmodule AshRemote.E2ETest do
     assert loaded.user.name == "Ada"
   end
 
+  test "self-referential relationship with a non-conventional FK round-trips" do
+    parent = Ash.create!(mod(:Todo), %{title: "Ship it"})
+    _sub1 = Ash.create!(mod(:Todo), %{title: "Write changelog", parent_id: parent.id})
+    _sub2 = Ash.create!(mod(:Todo), %{title: "Tag release", parent_id: parent.id})
+
+    loaded =
+      mod(:Todo)
+      |> Ash.Query.filter(id == ^parent.id)
+      |> Ash.Query.load(:subtasks)
+      |> Ash.read_one!()
+
+    assert loaded.subtasks |> Enum.map(& &1.title) |> Enum.sort() ==
+             ["Tag release", "Write changelog"]
+
+    sub =
+      mod(:Todo)
+      |> Ash.Query.filter(title == "Tag release")
+      |> Ash.Query.load(:parent)
+      |> Ash.read_one!()
+
+    assert sub.parent.title == "Ship it"
+  end
+
   test "filter and sort are pushed to the backend" do
     seed()
     Ash.create!(mod(:Todo), %{title: "Aaa"})

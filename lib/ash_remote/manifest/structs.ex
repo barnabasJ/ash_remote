@@ -77,7 +77,16 @@ end
 defmodule AshRemote.Manifest.Relationship do
   @moduledoc false
   @type t :: %__MODULE__{}
-  defstruct [:name, :type, :cardinality, :destination, :description, allow_nil?: true]
+  defstruct [
+    :name,
+    :type,
+    :cardinality,
+    :destination,
+    :description,
+    :source_attribute,
+    :destination_attribute,
+    allow_nil?: true
+  ]
 end
 
 defmodule AshRemote.Manifest.Action do

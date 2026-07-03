@@ -45,8 +45,10 @@ defmodule AshRemote.Server do
   end
 
   # Ash's JsonSerializer (through at least 3.29.3) omits the action `name` from
-  # serialized entrypoints, but the %Manifest{} struct carries it — inject it so
-  # the client knows which action to call. (Candidate upstream fix.)
+  # serialized entrypoints and the source/destination attributes from
+  # relationships, but the live resources carry them — inject both so the
+  # client can call the right action and mirror relationships whose attributes
+  # don't follow naming conventions. (Candidate upstream fixes.)
   defp manifest_map(spec) do
     map = Ash.Info.Manifest.JsonSerializer.to_map(spec)
 
@@ -58,7 +60,32 @@ defmodule AshRemote.Server do
         update_in(entry, ["action"], &Map.put(&1, "name", to_string(action.name)))
       end)
 
-    Map.put(map, "entrypoints", entrypoints)
+    resources =
+      map
+      |> Map.get("resources", [])
+      |> Enum.zip(spec.resources)
+      |> Enum.map(fn {entry, %{module: module}} ->
+        Map.update(entry, "relationships", %{}, &inject_relationship_attributes(&1, module))
+      end)
+
+    map
+    |> Map.put("entrypoints", entrypoints)
+    |> Map.put("resources", resources)
+  end
+
+  defp inject_relationship_attributes(relationships, module) do
+    Map.new(relationships, fn {name, rel_map} ->
+      case Ash.Resource.Info.relationship(module, String.to_existing_atom(name)) do
+        %{source_attribute: source, destination_attribute: destination} ->
+          {name,
+           rel_map
+           |> Map.put("source_attribute", to_string(source))
+           |> Map.put("destination_attribute", to_string(destination))}
+
+        _ ->
+          {name, rel_map}
+      end
+    end)
   end
 
   @doc "Run an action against the exposed resources. Returns the response envelope."
@@ -108,7 +135,7 @@ defmodule AshRemote.Server do
       |> maybe(&Ash.Query.sort_input/2, params["sort"])
       |> Ash.Query.select(select)
       |> Ash.Query.load(load)
-      |> maybe(&Ash.Query.page/2, page_opts(params["page"]))
+      |> apply_page(action, page_opts(params["page"]))
 
     if get?(action, params) do
       query |> Ash.read_one!() |> then(&Fields.serialize(&1, resource, fields))
@@ -166,6 +193,19 @@ defmodule AshRemote.Server do
     key = Map.new(primary_key, fn {k, v} -> {String.to_existing_atom(to_string(k)), v} end)
     Ash.get!(resource, key)
   end
+
+  # Actions without pagination can still honor a limit/offset request (the
+  # client's Ash.get/2, for one, reads with `limit: 2`) — apply them as plain
+  # query limit/offset, which is the same read minus the page envelope.
+  defp apply_page(query, _action, nil), do: query
+
+  defp apply_page(query, %{pagination: pagination}, opts) when pagination in [nil, false] do
+    query
+    |> maybe(&Ash.Query.limit/2, opts[:limit])
+    |> maybe(&Ash.Query.offset/2, opts[:offset])
+  end
+
+  defp apply_page(query, _action, opts), do: Ash.Query.page(query, opts)
 
   defp page_opts(nil), do: nil
 

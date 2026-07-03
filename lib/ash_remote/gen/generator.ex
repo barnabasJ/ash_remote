@@ -96,11 +96,6 @@ defmodule AshRemote.Gen do
   end
 
   defp gen_remote(res, ctx) do
-    managed_attrs = manifest_attribute_names(res) -- belongs_to_fks(res)
-    managed_calcs = manifest_loadable_names(res)
-    managed_rels = Map.keys(res.relationships) |> Enum.map(&String.to_atom/1)
-    managed_actions = Enum.map(res.actions, &String.to_atom(&1.name))
-
     base =
       if ctx.base_url, do: "    base_url #{inspect(ctx.base_url)}\n", else: ""
 
@@ -108,11 +103,7 @@ defmodule AshRemote.Gen do
       remote do
         source #{inspect(res.module)}
         schema_version #{inspect(ctx.manifest.schema_version)}
-    #{base}    managed_attributes #{inspect(managed_attrs)}
-        managed_relationships #{inspect(managed_rels)}
-        managed_calculations #{inspect(managed_calcs)}
-        managed_actions #{inspect(managed_actions)}
-      end
+    #{base}  end
     """
     |> String.trim_trailing()
   end
@@ -162,20 +153,31 @@ defmodule AshRemote.Gen do
 
   defp relationship_line(name, rel, ctx) do
     dest = client_module(rel.destination, ctx)
+    attrs = relationship_attribute_opts(rel)
 
     case rel.type do
       :belongs_to ->
-        "belongs_to :#{name}, #{dest}, public?: true, attribute_writable?: true"
+        "belongs_to :#{name}, #{dest}, public?: true, attribute_writable?: true#{attrs}"
 
       :has_many ->
-        "has_many :#{name}, #{dest}, public?: true"
+        "has_many :#{name}, #{dest}, public?: true#{attrs}"
 
       :has_one ->
-        "has_one :#{name}, #{dest}, public?: true"
+        "has_one :#{name}, #{dest}, public?: true#{attrs}"
 
       _ ->
         ""
     end
+  end
+
+  # Mirror the backend's exact source/destination attributes (when the manifest
+  # carries them) instead of relying on Ash's name-based inference, which
+  # breaks for relationships like `belongs_to :list` (FK `list_id`, not
+  # `todo_list_id`) or self-referential `has_many :subtasks`.
+  defp relationship_attribute_opts(rel) do
+    [source_attribute: rel.source_attribute, destination_attribute: rel.destination_attribute]
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Enum.map_join(fn {key, value} -> ", #{key}: :#{value}" end)
   end
 
   defp gen_calculations(res, ctx) do
@@ -303,18 +305,10 @@ defmodule AshRemote.Gen do
     |> Enum.sort_by(fn {name, _} -> name end)
   end
 
-  defp manifest_attribute_names(res) do
-    res |> attribute_fields() |> Enum.map(fn {name, _} -> String.to_atom(name) end)
-  end
-
-  defp manifest_loadable_names(res) do
-    res |> loadable_fields() |> Enum.map(fn {name, _} -> String.to_atom(name) end)
-  end
-
   defp belongs_to_fks(res) do
     res.relationships
     |> Enum.filter(fn {_name, rel} -> rel.type == :belongs_to end)
-    |> Enum.map(fn {name, _rel} -> String.to_atom("#{name}_id") end)
+    |> Enum.map(fn {name, rel} -> rel.source_attribute || String.to_atom("#{name}_id") end)
   end
 
   # --- type rendering ------------------------------------------------------

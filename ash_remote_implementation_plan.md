@@ -24,7 +24,7 @@ actually built. Tests: `mix test` → 1 doctest + 53 tests green; the example cl
 | 4 Resource extension & Info | ✅ done | `AshRemote.Resource` (`remote do … end`) + Info + verifier. schema_version verifier is basic (presence, not deep compat). |
 | 5 Manifest ingestion | ✅ done | `AshRemote.Manifest.Loader` + own structs, version-validated. |
 | 6 Code generation | ✅ done | `mix ash_remote.gen` (one `Gen` module, not split files): enums/NewTypes, attrs, calc/agg stubs, relationships, action stubs, `remote` block. **Generic actions not generated.** `--check`/`--dry-run` via Igniter. |
-| 7 Igniter regeneration | ❌ not built | `managed_*` lists are **emitted but unused** — the diff-aware reconciler isn't written; regen overwrites. |
+| 7 Igniter regeneration | ❌ not built | Ownership model decided: **managed = whatever the manifest declares** (recomputed at regen time, no `managed_*` bookkeeping lists); anything else in the file is user-owned and ignored. The diff-aware reconciler isn't written; regen overwrites. |
 | 8 Auth/multitenancy/config | ❌ not built | Lazy `base_url` config done; token/actor/tenant propagation and CSRF not done. |
 | 9 Installer, docs, examples | 🟡 partial | Example monorepo built (`example/`): `todo_server` + a **LiveView** `todo_client`. `mix igniter.install` and full docs not done. |
 | 10 Hardening & upstream | ❌ not built | Bulk N-call, keyset edge cases, Channel transport, shared-core extraction pending. |
@@ -249,7 +249,6 @@ sources all config from Info.
   - [ ] identities + primary key
   - [ ] **action stubs** — name/type + accepted args from the manifest, **no** changes/validations
   - [ ] the `remote` block (action mapping, embedded capabilities, `schema_version`, `source_hash`)
-  - [ ] mark the generated DSL regions for Phase 7 (managed-entity tracking, e.g. `managed_fields [...]`).
 - [ ] `AshRemote.Gen.DomainGen`: generate/patch a client domain listing the resources (+ optional code
       interface).
 - [ ] Wire the task into `mix ash.codegen`; support `--check` (non-zero exit when stale) and `--dry-run`.
@@ -264,12 +263,12 @@ hand-written ones against the live backend.
 
 ## Phase 7 — Igniter intelligent regeneration
 
-- [ ] Make the generator diff-aware. For an existing generated module, locate each managed DSL section
-      via zipper and reconcile **only generator-owned entities** by name (add new, update changed, remove
-      ones dropped from the manifest) while never touching user-added actions, changes, preparations,
-      helpers, or extra code.
-- [ ] Track generator ownership (the `managed_*` lists in the `remote` block) so "user added this
-      attribute" is distinguishable from "generator added it and it's now gone."
+- [ ] Make the generator diff-aware. For an existing generated module, locate each DSL section via
+      zipper and reconcile **only manifest-declared entities** by name (add new, update changed) while
+      never touching user-added actions, changes, preparations, helpers, or extra code.
+- [ ] Ownership = manifest membership, recomputed at regen time — no persisted `managed_*` lists.
+      Entities present in the file but absent from the manifest are treated as user-owned and left
+      alone; regen **warns** about ones that look stale instead of deleting them.
 - [ ] Handle: `schema_version` bump (warn/refuse), field rename (delete+add, or a rename map),
       removed exposed action (drop the stub unless the user customized it → then warn, don't clobber).
 - [ ] Tests: generate → hand-edit (add a custom action + a client-side change + a helper fn) →
