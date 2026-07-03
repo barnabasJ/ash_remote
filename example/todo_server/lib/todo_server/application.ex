@@ -21,13 +21,35 @@ defmodule TodoServer.Application do
     end
   end
 
-  # Seed a demo user + todos once, if the store is empty.
+  # Seed demo users, lists and todos once, if the store is empty.
   defp seed do
     if Ash.count!(TodoServer.Todo) == 0 do
-      user = Ash.create!(TodoServer.User, %{name: "Ada"})
+      ada = Ash.create!(TodoServer.User, %{name: "Ada"})
+      grace = Ash.create!(TodoServer.User, %{name: "Grace"})
 
-      Ash.create!(TodoServer.Todo, %{title: "Buy milk", priority: :low, user_id: user.id})
-      Ash.create!(TodoServer.Todo, %{title: "Ship ash_remote", priority: :high, user_id: user.id})
+      errands = Ash.create!(TodoServer.TodoList, %{name: "Errands", user_id: ada.id})
+      launch = Ash.create!(TodoServer.TodoList, %{name: "Launch", user_id: grace.id})
+
+      Ash.create!(TodoServer.Todo, %{title: "Buy milk", priority: :low, list_id: errands.id})
+
+      Ash.create!(TodoServer.Todo, %{
+        title: "Renew passport",
+        priority: :medium,
+        due_date: ~D[2020-01-01],
+        list_id: errands.id
+      })
+
+      Ash.create!(TodoServer.Todo, %{
+        title: "Pick a name",
+        priority: :medium,
+        completed: true,
+        list_id: launch.id
+      })
+
+      ship = Ash.create!(TodoServer.Todo, %{title: "Ship ash_remote", priority: :high, list_id: launch.id})
+
+      Ash.create!(TodoServer.Todo, %{title: "Write the changelog", priority: :high, parent_id: ship.id})
+      Ash.create!(TodoServer.Todo, %{title: "Tag the release", priority: :medium, parent_id: ship.id})
     end
   rescue
     error -> Logger.warning("seed skipped: #{inspect(error)}")

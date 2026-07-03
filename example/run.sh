@@ -4,17 +4,20 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-export HEX_OFFLINE="${HEX_OFFLINE:-1}"
 SERVER_PORT="${SERVER_PORT:-4010}"
 WEB_PORT="${WEB_PORT:-4001}"
 export TODO_SERVER_URL="http://127.0.0.1:${SERVER_PORT}"
 
 # Compile up front (the first run compiles ash and friends — can take a minute).
 # Doing it here, in the foreground, means the health check below isn't racing
-# a multi-minute compile.
+# a multi-minute compile. Only hit the Hex registry when deps are actually
+# missing/out of sync — the network here is unreliable, and an already-fetched
+# demo shouldn't die on a registry timeout.
 echo "▶ fetching + compiling deps (first run can take a minute)…"
-( cd todo_server && mix deps.get >/dev/null && mix compile )
-( cd todo_client && mix deps.get >/dev/null && mix compile )
+for app in todo_server todo_client; do
+  ( cd "$app" && mix deps.loadpaths --no-compile >/dev/null 2>&1 || mix deps.get >/dev/null )
+  ( cd "$app" && mix compile )
+done
 
 echo "▶ starting todo_server on :${SERVER_PORT}"
 ( cd todo_server && PORT="$SERVER_PORT" mix run --no-halt >/tmp/todo_server.log 2>&1 ) &

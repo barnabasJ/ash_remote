@@ -1,11 +1,11 @@
-defmodule TodoClient.Remote.User do
+defmodule TodoClient.Remote.TodoList do
   use Ash.Resource,
     domain: TodoClient.Remote.Domain,
     data_layer: AshRemote.DataLayer,
     extensions: [AshRemote.Resource]
 
   remote do
-    source("TodoServer.User")
+    source("TodoServer.TodoList")
     schema_version("1.0.0")
   end
 
@@ -15,15 +15,26 @@ defmodule TodoClient.Remote.User do
   end
 
   relationships do
-    has_many(:lists, TodoClient.Remote.TodoList,
+    has_many(:todos, TodoClient.Remote.Todo,
       public?: true,
       source_attribute: :id,
-      destination_attribute: :user_id
+      destination_attribute: :list_id
+    )
+
+    belongs_to(:user, TodoClient.Remote.User,
+      public?: true,
+      attribute_writable?: true,
+      source_attribute: :user_id,
+      destination_attribute: :id
     )
   end
 
   calculations do
-    calculate :list_count, :integer, expr(not is_nil(id)) do
+    calculate :completed_count, :integer, expr(not is_nil(id)) do
+      public?(true)
+    end
+
+    calculate :todo_count, :integer, expr(not is_nil(id)) do
       public?(true)
     end
   end
@@ -31,7 +42,7 @@ defmodule TodoClient.Remote.User do
   actions do
     create :create do
       primary?(true)
-      accept([:name])
+      accept([:name, :user_id])
     end
 
     read :read do

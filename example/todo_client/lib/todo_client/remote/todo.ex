@@ -7,10 +7,6 @@ defmodule TodoClient.Remote.Todo do
   remote do
     source("TodoServer.Todo")
     schema_version("1.0.0")
-    managed_attributes([:completed, :due_date, :id, :inserted_at, :priority, :title])
-    managed_relationships([:user])
-    managed_calculations([:overdue?])
-    managed_actions([:create, :destroy, :read, :update])
   end
 
   attributes do
@@ -23,7 +19,25 @@ defmodule TodoClient.Remote.Todo do
   end
 
   relationships do
-    belongs_to(:user, TodoClient.Remote.User, public?: true, attribute_writable?: true)
+    belongs_to(:list, TodoClient.Remote.TodoList,
+      public?: true,
+      attribute_writable?: true,
+      source_attribute: :list_id,
+      destination_attribute: :id
+    )
+
+    belongs_to(:parent, TodoClient.Remote.Todo,
+      public?: true,
+      attribute_writable?: true,
+      source_attribute: :parent_id,
+      destination_attribute: :id
+    )
+
+    has_many(:subtasks, TodoClient.Remote.Todo,
+      public?: true,
+      source_attribute: :id,
+      destination_attribute: :parent_id
+    )
   end
 
   calculations do
@@ -35,7 +49,7 @@ defmodule TodoClient.Remote.Todo do
   actions do
     create :create do
       primary?(true)
-      accept([:title, :completed, :priority, :due_date, :user_id])
+      accept([:title, :completed, :priority, :due_date, :list_id, :parent_id])
     end
 
     destroy :destroy do
@@ -50,7 +64,7 @@ defmodule TodoClient.Remote.Todo do
     update :update do
       primary?(true)
       require_atomic?(false)
-      accept([:title, :completed, :priority, :due_date, :user_id])
+      accept([:title, :completed, :priority, :due_date, :list_id, :parent_id])
     end
   end
 end

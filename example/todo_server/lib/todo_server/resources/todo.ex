@@ -16,7 +16,9 @@ defmodule TodoServer.Todo do
   end
 
   relationships do
-    belongs_to :user, TodoServer.User, public?: true, attribute_writable?: true
+    belongs_to :list, TodoServer.TodoList, public?: true, attribute_writable?: true
+    belongs_to :parent, TodoServer.Todo, public?: true, attribute_writable?: true
+    has_many :subtasks, TodoServer.Todo, public?: true, destination_attribute: :parent_id
   end
 
   calculations do
@@ -28,7 +30,7 @@ defmodule TodoServer.Todo do
   end
 
   actions do
-    default_accept [:title, :completed, :priority, :due_date, :user_id]
+    default_accept [:title, :completed, :priority, :due_date, :list_id, :parent_id]
 
     read :read do
       primary? true

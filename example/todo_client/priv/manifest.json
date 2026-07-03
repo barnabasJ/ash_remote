@@ -59,7 +59,20 @@
           {
             "allow_nil": true,
             "has_default": false,
-            "name": "user_id",
+            "name": "list_id",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "uuid",
+              "module": "Ash.Type.UUID",
+              "name": "UUID"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "parent_id",
             "required": false,
             "sensitive": false,
             "type": {
@@ -158,7 +171,20 @@
           {
             "allow_nil": true,
             "has_default": false,
-            "name": "user_id",
+            "name": "list_id",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "uuid",
+              "module": "Ash.Type.UUID",
+              "name": "UUID"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "parent_id",
             "required": false,
             "sensitive": false,
             "type": {
@@ -175,6 +201,55 @@
         "type": "update"
       },
       "resource": "TodoServer.Todo"
+    },
+    {
+      "action": {
+        "get": false,
+        "inputs": [
+          {
+            "allow_nil": false,
+            "has_default": false,
+            "name": "name",
+            "required": true,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "string",
+              "module": "Ash.Type.String",
+              "name": "String"
+            }
+          },
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "user_id",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "uuid",
+              "module": "Ash.Type.UUID",
+              "name": "UUID"
+            }
+          }
+        ],
+        "metadata": [],
+        "name": "create",
+        "primary": true,
+        "type": "create"
+      },
+      "resource": "TodoServer.TodoList"
+    },
+    {
+      "action": {
+        "get": false,
+        "inputs": [],
+        "metadata": [],
+        "name": "read",
+        "primary": true,
+        "type": "read"
+      },
+      "resource": "TodoServer.TodoList"
     },
     {
       "action": {
@@ -2293,6 +2368,72 @@
           },
           "writable": false
         },
+        "list_id": {
+          "allow_nil": true,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "uuid",
+            "module": "Ash.Type.UUID",
+            "name": "UUID"
+          },
+          "writable": true
+        },
         "overdue?": {
           "allow_nil": true,
           "filter_custom_expressions": [],
@@ -2342,6 +2483,72 @@
             "name": "Boolean"
           },
           "writable": false
+        },
+        "parent_id": {
+          "allow_nil": true,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "uuid",
+            "module": "Ash.Type.UUID",
+            "name": "UUID"
+          },
+          "writable": true
         },
         "priority": {
           "allow_nil": true,
@@ -2492,9 +2699,52 @@
             "name": "String"
           },
           "writable": true
-        },
-        "user_id": {
+        }
+      },
+      "module": "TodoServer.Todo",
+      "name": "Todo",
+      "primary_key": [
+        "id"
+      ],
+      "relationships": {
+        "list": {
           "allow_nil": true,
+          "cardinality": "one",
+          "destination": "TodoServer.TodoList",
+          "destination_attribute": "id",
+          "filterable": true,
+          "sortable": true,
+          "source_attribute": "list_id",
+          "type": "belongs_to"
+        },
+        "parent": {
+          "allow_nil": true,
+          "cardinality": "one",
+          "destination": "TodoServer.Todo",
+          "destination_attribute": "id",
+          "filterable": true,
+          "sortable": true,
+          "source_attribute": "parent_id",
+          "type": "belongs_to"
+        },
+        "subtasks": {
+          "allow_nil": true,
+          "cardinality": "many",
+          "destination": "TodoServer.Todo",
+          "destination_attribute": "parent_id",
+          "filterable": true,
+          "sortable": true,
+          "source_attribute": "id",
+          "type": "has_many"
+        }
+      }
+    },
+    {
+      "embedded": false,
+      "fields": {
+        "completed_count": {
+          "aggregate_kind": "count",
+          "allow_nil": false,
           "filter_custom_expressions": [],
           "filter_functions": [
             {
@@ -2546,39 +2796,19 @@
           ],
           "filterable": true,
           "has_default": false,
-          "kind": "attribute",
+          "kind": "aggregate",
           "primary_key": false,
           "select_by_default": true,
           "sensitive": false,
           "sortable": true,
           "type": {
             "allow_nil": null,
-            "kind": "uuid",
-            "module": "Ash.Type.UUID",
-            "name": "UUID"
+            "kind": "integer",
+            "module": "Ash.Type.Integer",
+            "name": "Integer"
           },
-          "writable": true
-        }
-      },
-      "module": "TodoServer.Todo",
-      "name": "Todo",
-      "primary_key": [
-        "id"
-      ],
-      "relationships": {
-        "user": {
-          "allow_nil": true,
-          "cardinality": "one",
-          "destination": "TodoServer.User",
-          "filterable": true,
-          "sortable": true,
-          "type": "belongs_to"
-        }
-      }
-    },
-    {
-      "embedded": false,
-      "fields": {
+          "writable": false
+        },
         "id": {
           "allow_nil": false,
           "filter_custom_expressions": [],
@@ -2728,10 +2958,143 @@
             "name": "String"
           },
           "writable": true
+        },
+        "todo_count": {
+          "aggregate_kind": "count",
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "aggregate",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "integer",
+            "module": "Ash.Type.Integer",
+            "name": "Integer"
+          },
+          "writable": false
+        },
+        "user_id": {
+          "allow_nil": true,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "uuid",
+            "module": "Ash.Type.UUID",
+            "name": "UUID"
+          },
+          "writable": true
         }
       },
-      "module": "TodoServer.User",
-      "name": "User",
+      "module": "TodoServer.TodoList",
+      "name": "TodoList",
       "primary_key": [
         "id"
       ],
@@ -2740,8 +3103,259 @@
           "allow_nil": true,
           "cardinality": "many",
           "destination": "TodoServer.Todo",
+          "destination_attribute": "list_id",
           "filterable": true,
           "sortable": true,
+          "source_attribute": "id",
+          "type": "has_many"
+        },
+        "user": {
+          "allow_nil": true,
+          "cardinality": "one",
+          "destination": "TodoServer.User",
+          "destination_attribute": "id",
+          "filterable": true,
+          "sortable": true,
+          "source_attribute": "user_id",
+          "type": "belongs_to"
+        }
+      }
+    },
+    {
+      "embedded": false,
+      "fields": {
+        "id": {
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": true,
+          "kind": "attribute",
+          "primary_key": true,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "uuid",
+            "module": "Ash.Type.UUID",
+            "name": "UUID"
+          },
+          "writable": false
+        },
+        "list_count": {
+          "aggregate_kind": "count",
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "aggregate",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "integer",
+            "module": "Ash.Type.Integer",
+            "name": "Integer"
+          },
+          "writable": false
+        },
+        "name": {
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "contains",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            },
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "string_ends_with",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            },
+            {
+              "name": "string_starts_with",
+              "rhs": {
+                "concrete": "Ash.Type.String"
+              }
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "string",
+            "module": "Ash.Type.String",
+            "name": "String"
+          },
+          "writable": true
+        }
+      },
+      "module": "TodoServer.User",
+      "name": "User",
+      "primary_key": [
+        "id"
+      ],
+      "relationships": {
+        "lists": {
+          "allow_nil": true,
+          "cardinality": "many",
+          "destination": "TodoServer.TodoList",
+          "destination_attribute": "user_id",
+          "filterable": true,
+          "sortable": true,
+          "source_attribute": "id",
           "type": "has_many"
         }
       }

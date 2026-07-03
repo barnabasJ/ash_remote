@@ -4,6 +4,7 @@ defmodule TodoServer.Domain do
 
   resources do
     resource TodoServer.User
+    resource TodoServer.TodoList
     resource TodoServer.Todo
   end
 
@@ -13,6 +14,11 @@ defmodule TodoServer.Domain do
       expose :create
       expose :update
       expose :destroy
+    end
+
+    resource TodoServer.TodoList do
+      expose :read
+      expose :create
     end
 
     resource TodoServer.User do

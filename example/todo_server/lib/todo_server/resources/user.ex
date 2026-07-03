@@ -12,7 +12,13 @@ defmodule TodoServer.User do
   end
 
   relationships do
-    has_many :todos, TodoServer.Todo, public?: true
+    has_many :lists, TodoServer.TodoList, public?: true
+  end
+
+  aggregates do
+    count :list_count, :lists do
+      public? true
+    end
   end
 
   actions do
