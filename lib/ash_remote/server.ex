@@ -68,6 +68,7 @@ defmodule AshRemote.Server do
         entry
         |> Map.update("relationships", %{}, &inject_relationship_attributes(&1, module))
         |> Map.put("validations", serialize_validations(module))
+        |> Map.update("fields", %{}, &inject_calculation_expressions(&1, module))
       end)
 
     map
@@ -132,6 +133,26 @@ defmodule AshRemote.Server do
       :error -> :error
       acc -> {:ok, Enum.reverse(acc)}
     end
+  end
+
+  # Mirrorable calculation expressions, published so clients can carry the
+  # real expression instead of a placeholder. An expression mirrors when
+  # every node is in `AshRemote.Expression`'s safe set (public attribute
+  # refs, comparison operators, and/or/not, today()/now(), literal values) —
+  # anything else (module calculations, fragments, relationship refs) is
+  # skipped: those are proxied by name and the server stays authoritative.
+  defp inject_calculation_expressions(fields, module) do
+    Map.new(fields, fn {name, field_map} ->
+      with "calculation" <- field_map["kind"],
+           %Ash.Resource.Calculation{
+             calculation: {Ash.Resource.Calculation.Expression, opts}
+           } <- Ash.Resource.Info.calculation(module, String.to_existing_atom(name)),
+           {:ok, code} <- AshRemote.Expression.encode(opts[:expr], module) do
+        {name, Map.put(field_map, "expression", code)}
+      else
+        _ -> {name, field_map}
+      end
+    end)
   end
 
   defp inject_relationship_attributes(relationships, module) do

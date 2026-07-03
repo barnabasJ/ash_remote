@@ -71,6 +71,7 @@ defmodule AshRemote.Manifest.Field do
     primary_key?: false,
     sensitive?: false,
     select_by_default?: true,
+    expression: nil,
     arguments: [],
     filter_operators: [],
     filter_functions: []

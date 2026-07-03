@@ -116,7 +116,9 @@ defmodule AshRemote.Gen do
       res
       |> attribute_fields()
       |> Enum.reject(fn {name, _f} -> String.to_atom(name) in fk_names end)
-      |> Enum.map(fn {name, field} -> {String.to_atom(name), attribute_line(name, field, ctx)} end)
+      |> Enum.map(fn {name, field} ->
+        {String.to_atom(name), attribute_line(name, field, ctx)}
+      end)
 
     relationships =
       res.relationships
@@ -293,7 +295,7 @@ defmodule AshRemote.Gen do
     |> Enum.map_join(fn {key, value} -> ", #{key}: :#{value}" end)
   end
 
-  defp calculation_block(name, field, pk, ctx) do
+  defp calculation_block(name, field, _pk, ctx) do
     args =
       Enum.map_join(field.arguments, "\n", fn arg ->
         "      argument :#{arg.name}, #{render_type(arg.type, ctx)}, allow_nil?: true"
@@ -301,8 +303,19 @@ defmodule AshRemote.Gen do
 
     inner = "      public? true" <> if(args == "", do: "", else: "\n" <> args)
 
+    # Mirrorable expressions become the real thing (locally evaluable,
+    # filterable, sortable). Everything else is proxied by name through
+    # AshRemote.RemoteCalculation — the server computes; Ash natively
+    # refuses filter/sort on expression-less Elixir calculations.
+    implementation =
+      if field.expression && AshRemote.Expression.safe?(field.expression) do
+        "expr(#{field.expression})"
+      else
+        "{AshRemote.RemoteCalculation, calc: :#{name}}"
+      end
+
     """
-        calculate :#{name}, #{render_type(field.type, ctx)}, expr(not is_nil(#{pk})) do
+        calculate :#{name}, #{render_type(field.type, ctx)}, #{implementation} do
     #{inner}
         end
     """
@@ -316,7 +329,13 @@ defmodule AshRemote.Gen do
 
   defp action_block(%{type: :read} = action, _res) do
     opts =
-      [primary?(action), if(action.get?, do: "    get? true")]
+      [
+        primary?(action),
+        if(action.get?, do: "    get? true"),
+        # Records requested remote calculations in query context so the data
+        # layer can prefetch them in the same request.
+        "    prepare AshRemote.PrefetchCalculations"
+      ]
       |> compact_lines()
 
     "    read :#{action.name} do\n#{opts}\n    end"

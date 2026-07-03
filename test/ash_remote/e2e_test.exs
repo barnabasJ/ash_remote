@@ -142,4 +142,71 @@ defmodule AshRemote.E2ETest do
   test "valid input passes the mirrored validations and round-trips" do
     assert %{title: "Big"} = Ash.create!(mod(:Todo), %{title: "Big"})
   end
+
+  describe "remote calculations" do
+    test "mirrored expressions are real; the rest proxy through RemoteCalculation" do
+      assert {Ash.Resource.Calculation.Expression, _opts} =
+               Ash.Resource.Info.calculation(mod(:Todo), :is_overdue).calculation
+
+      assert {AshRemote.RemoteCalculation, [calc: :title_with_prefix]} =
+               Ash.Resource.Info.calculation(mod(:Todo), :title_with_prefix).calculation
+
+      # Aggregates are generated as calc fields and proxy the same way.
+      assert {AshRemote.RemoteCalculation, [calc: :comment_count]} =
+               Ash.Resource.Info.calculation(mod(:Todo), :comment_count).calculation
+    end
+
+    test "remote calculations loaded through a read are prefetched: one request total" do
+      %{todo: todo} = seed()
+      TestBackend.reset_rpc_count!()
+
+      loaded =
+        mod(:Todo)
+        |> Ash.Query.filter(id == ^todo.id)
+        |> Ash.Query.load([:comment_count, {:title_with_prefix, %{prefix: "P:"}}])
+        |> Ash.read_one!()
+
+      assert loaded.comment_count == 1
+      assert loaded.title_with_prefix == "P:Write code"
+      assert TestBackend.rpc_count() == 1
+    end
+
+    test "standalone Ash.load bundles all remote calculations into one request" do
+      %{todo: todo} = seed()
+      [record] = mod(:Todo) |> Ash.Query.filter(id == ^todo.id) |> Ash.read!()
+      TestBackend.reset_rpc_count!()
+
+      loaded = Ash.load!(record, [:comment_count, {:title_with_prefix, %{prefix: "B:"}}])
+
+      assert loaded.comment_count == 1
+      assert loaded.title_with_prefix == "B:Write code"
+      assert TestBackend.rpc_count() == 1
+    end
+
+    test "filtering on a mirrored expression calculation runs REAL semantics" do
+      # The old placeholder (`expr(not is_nil(id))`) would have matched every
+      # todo here — filtering on a calc inlines its expression, and mirrored
+      # expressions make that correct instead of silently wrong.
+      seed()
+      Ash.create!(mod(:Todo), %{title: "Very late", due_date: ~D[2020-01-01]})
+
+      assert ["Very late"] =
+               mod(:Todo)
+               |> Ash.Query.filter(is_overdue == true)
+               |> Ash.read!()
+               |> Enum.map(& &1.title)
+    end
+
+    test "filtering on a proxied module calculation is correct via runtime evaluation" do
+      # Without an expression Ash cannot push the filter; it fetches rows and
+      # filters in memory, invoking calculate/3 — whose values come from the
+      # server. Correct, at the cost of an extra (batched) request.
+      %{todo: todo} = seed()
+
+      assert [%{id: filtered_id}] =
+               mod(:Todo) |> Ash.Query.filter(comment_count > 0) |> Ash.read!()
+
+      assert filtered_id == todo.id
+    end
+  end
 end

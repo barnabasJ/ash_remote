@@ -94,7 +94,7 @@ defmodule AshRemote.DataLayer do
   @impl true
   def run_query(%Query{resource: resource} = query, _resource) do
     cfg = config(resource)
-    {fields, plan} = Fields.build(query)
+    {fields, plan} = query |> Fields.build() |> add_prefetch_calculations(query)
 
     body =
       Protocol.build_run(%{
@@ -171,6 +171,85 @@ defmodule AshRemote.DataLayer do
     end
   end
 
+  # Remote (module-based) calculations requested by the read, recorded in
+  # query context by AshRemote.PrefetchCalculations: fold them into the same
+  # request and stash the values in record metadata, so RemoteCalculation
+  # makes no follow-up request when the data layer served the rows.
+  defp add_prefetch_calculations({fields, plan}, %Query{context: context}) do
+    specs = get_in(context || %{}, [:ash_remote, :prefetch_calcs]) || []
+
+    extra_fields = Enum.map(specs, &calc_spec_field/1)
+    extra_plan = Enum.map(specs, &{to_string(&1.name), {:remote_calc_meta, &1.name}})
+
+    {fields ++ extra_fields, plan ++ extra_plan}
+  end
+
+  defp calc_spec_field(%{name: name, args: args}) when args == %{}, do: to_string(name)
+
+  defp calc_spec_field(%{name: name, args: args}) do
+    %{to_string(name) => %{"args" => Map.new(args, fn {k, v} -> {to_string(k), v} end)}}
+  end
+
+  @doc """
+  Fetches remote-calculation values for a set of records in ONE request:
+  `primary_key in pk_values`, selecting only the primary key plus the given
+  calculation specs (`%{name: atom, args: map}`). Returns
+  `{:ok, %{calc_name => %{pk_string => value}}}`.
+
+  Used by `AshRemote.RemoteCalculation` when rows were served without this
+  data layer running (e.g. from a cache layer) — the whole requested bundle
+  is fetched at once so sibling calculations share the round-trip.
+  """
+  def fetch_remote_calculations(resource, pk_values, specs) do
+    cfg = config(resource)
+    [pk] = Ash.Resource.Info.primary_key(resource)
+    pk_key = to_string(pk)
+    filter = Ash.Filter.parse!(resource, [{pk, [in: pk_values]}])
+
+    body =
+      Protocol.build_run(%{
+        resource: cfg.source,
+        action: read_action_name(resource, cfg),
+        fields: [pk_key | Enum.map(specs, &calc_spec_field/1)],
+        filter: Filter.encode(filter, applicable: cfg[:applicable])
+      })
+
+    with {:ok, response} <- request(cfg, :run, body),
+         {:ok, data} <- Protocol.parse_run(response) do
+      rows =
+        case data do
+          %{"results" => results} -> results
+          results when is_list(results) -> results
+        end
+
+      {:ok,
+       Map.new(specs, fn %{name: name} ->
+         key = to_string(name)
+
+         {name,
+          Map.new(rows, fn row ->
+            {to_string(row[pk_key]), cast_calculation(resource, name, row[key])}
+          end)}
+       end)}
+    else
+      {:error, errors} when is_list(errors) -> {:error, AshRemote.Error.to_ash_error(errors)}
+      {:error, other} -> {:error, other}
+    end
+  end
+
+  defp cast_calculation(resource, name, value) do
+    case Ash.Resource.Info.calculation(resource, name) do
+      %{type: type, constraints: constraints} ->
+        case Ash.Type.cast_input(type, value, constraints) do
+          {:ok, cast} -> cast
+          _ -> value
+        end
+
+      _ ->
+        value
+    end
+  end
+
   # --- encode helpers ------------------------------------------------------
 
   defp input(changeset) do
@@ -240,7 +319,16 @@ defmodule AshRemote.DataLayer do
     Map.put(record, name, cast_attribute(resource, name, value))
   end
 
-  defp place(record, {:calculation, %{load: load} = calc}, value, _resource) when not is_nil(load) do
+  defp place(record, {:remote_calc_meta, name}, value, resource) do
+    Ash.Resource.put_metadata(
+      record,
+      {:ash_remote_calc, name},
+      cast_calculation(resource, name, value)
+    )
+  end
+
+  defp place(record, {:calculation, %{load: load} = calc}, value, _resource)
+       when not is_nil(load) do
     Map.put(record, calc.load, value)
   end
 
@@ -248,7 +336,8 @@ defmodule AshRemote.DataLayer do
     Map.update!(record, :calculations, &Map.put(&1, calc.name, value))
   end
 
-  defp place(record, {:aggregate, %{load: load} = _agg}, value, _resource) when not is_nil(load) do
+  defp place(record, {:aggregate, %{load: load} = _agg}, value, _resource)
+       when not is_nil(load) do
     Map.put(record, load, value)
   end
 

@@ -370,3 +370,47 @@ the docs.
 - **Bulk semantics:** N-call fallback now vs. wait for a backend batch endpoint.
 - **The manifest↔protocol alignment seam** — the one real risk. Worth raising with Zach early given the
   intent to extract a shared core anyway.
+
+---
+
+## Follow-ups from the ash_multi_datalayer composition (2026-07-03) — IMPLEMENTED same day
+
+Composing the generated client resources under `ash_multi_datalayer` (ETS
+cache over `AshRemote.DataLayer`; see that repo's `example/`) surfaced three
+calculation-related follow-ups:
+
+(All three landed, with one improvement over the sketch: instead of an
+unevaluable stub, non-mappable calculations proxy through
+`AshRemote.RemoteCalculation` — no expression at all, so Ash natively
+handles filter/sort by runtime evaluation with server-fetched values, and
+nothing evaluable-but-wrong exists anywhere. Filtering on mirrored
+calculations now executes real semantics end-to-end; e2e-proven.)
+
+1. **Mirror calculation expressions when they map cleanly** — same criterion
+   and mechanism as the mirrored validations: export the expression in the
+   manifest when it is expressible as data (public attributes, builtin
+   operators/functions only; e.g. `Todo.overdue?`'s `due_date < today()`),
+   and generate the real expression on the client instead of the placeholder.
+   This is what unlocks any future *local* evaluation of calcs over cached
+   rows.
+
+2. **Replace the plausible placeholder with an unevaluable one** for
+   calculations that don't map. `expr(not is_nil(id))` exists to be
+   non-constant so Ash routes the calc through the data layer (correct, and
+   it is never evaluated in pure ash_remote) — but if any composition ever
+   evaluates it locally, it returns *plausible garbage* rather than an error.
+   An unevaluable-but-still-non-constant expression (e.g. a fragment
+   referencing an attribute) keeps the routing property while failing loudly
+   on local evaluation. Also audit: does `Ash.Query.filter(overdue? == true)`
+   inline the placeholder expression into the encoded filter today? If so
+   that is a live correctness bug independent of caching.
+
+3. **Batched remote module calculation (optional, larger)** — a shared
+   `AshRemote.RemoteCalculation` module-based calculation whose
+   `calculate/3` fetches values for all records in ONE `/rpc/run`
+   (`id in [...]`, selecting just the calc field), checking record metadata
+   for prefetched values first. Covers standalone `Ash.load(records, :calc)`
+   without a data-layer round-trip per record. Complementary to
+   ash_multi_datalayer's computed-value merge reads (see
+   `docs/design/20260703-computed-value-merge-reads-adr.md` in that repo),
+   which handle the cached-read case without any ash_remote change.

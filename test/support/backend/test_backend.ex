@@ -12,7 +12,9 @@ defmodule AshRemote.Backend.TestBackend do
 
   @doc "Start the backend server (idempotent — a second call is a no-op)."
   def start do
-    case Bandit.start_link(plug: AshRemote.Backend.RpcRouter, port: @port, startup_log: false) do
+    install_counter!()
+
+    case Bandit.start_link(plug: __MODULE__.CountingRouter, port: @port, startup_log: false) do
       {:ok, pid} -> {:ok, pid}
       {:error, {:already_started, pid}} -> {:ok, pid}
       {:error, {:shutdown, {:failed_to_start_child, _, :eaddrinuse}}} -> {:ok, :already_listening}
@@ -29,5 +31,35 @@ defmodule AshRemote.Backend.TestBackend do
     end
 
     :ok
+  end
+
+  @counter_key :ash_remote_test_rpc_counter
+
+  @doc "Number of /rpc/run requests the backend has served."
+  def rpc_count do
+    :counters.get(:persistent_term.get(@counter_key), 1)
+  end
+
+  @doc "Reset the /rpc/run request counter."
+  def reset_rpc_count! do
+    :counters.put(:persistent_term.get(@counter_key), 1, 0)
+    :ok
+  end
+
+  defp install_counter! do
+    :persistent_term.put(@counter_key, :counters.new(1, [:atomics]))
+  end
+
+  defmodule CountingRouter do
+    @moduledoc false
+    def init(opts), do: AshRemote.Backend.RpcRouter.init(opts)
+
+    def call(%Plug.Conn{request_path: "/rpc/run"} = conn, opts) do
+      counter = :persistent_term.get(:ash_remote_test_rpc_counter)
+      :counters.add(counter, 1, 1)
+      AshRemote.Backend.RpcRouter.call(conn, opts)
+    end
+
+    def call(conn, opts), do: AshRemote.Backend.RpcRouter.call(conn, opts)
   end
 end

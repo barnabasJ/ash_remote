@@ -156,6 +156,7 @@ defmodule AshRemote.Manifest.Loader do
       primary_key?: field["primary_key"] || false,
       sensitive?: field["sensitive"] || false,
       select_by_default?: Map.get(field, "select_by_default", true),
+      expression: field["expression"],
       arguments: normalize_arguments(field["arguments"]),
       filter_operators: normalize_applicable(field["filter_operators"]),
       filter_functions: normalize_applicable(field["filter_functions"])
