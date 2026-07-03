@@ -5,16 +5,16 @@ defmodule AshRemote.Client.User do
     data_layer: AshRemote.DataLayer
 
   attributes do
-    uuid_primary_key :id
-    attribute :name, :string, public?: true, allow_nil?: false
-    attribute :email, :string, public?: true
+    uuid_primary_key(:id)
+    attribute(:name, :string, public?: true, allow_nil?: false)
+    attribute(:email, :string, public?: true)
   end
 
   relationships do
-    has_many :todos, AshRemote.Client.Todo, public?: true
+    has_many(:todos, AshRemote.Client.Todo, public?: true)
   end
 
   actions do
-    defaults [:read, :destroy, create: :*, update: :*]
+    defaults([:read, :destroy, create: :*, update: :*])
   end
 end

@@ -6,18 +6,18 @@ defmodule AshRemote.Ext.Todo do
     extensions: [AshRemote.Resource]
 
   remote do
-    source "AshRemote.Backend.Todo"
-    action_map read: :read
-    schema_version "1.0.0"
+    source("AshRemote.Backend.Todo")
+    action_map(read: :read)
+    schema_version("1.0.0")
   end
 
   attributes do
-    uuid_primary_key :id
-    attribute :title, :string, public?: true
+    uuid_primary_key(:id)
+    attribute(:title, :string, public?: true)
   end
 
   actions do
-    defaults [:read, :destroy, create: :*, update: :*]
+    defaults([:read, :destroy, create: :*, update: :*])
   end
 end
 
@@ -26,6 +26,6 @@ defmodule AshRemote.Ext.Domain do
   use Ash.Domain, validate_config_inclusion?: false
 
   resources do
-    resource AshRemote.Ext.Todo
+    resource(AshRemote.Ext.Todo)
   end
 end

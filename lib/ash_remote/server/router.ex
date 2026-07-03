@@ -31,9 +31,9 @@ defmodule AshRemote.Server.Router do
 
       @ash_remote_otp_app unquote(otp_app)
 
-      plug Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Jason
-      plug :match
-      plug :dispatch
+      plug(Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Jason)
+      plug(:match)
+      plug(:dispatch)
 
       post "/rpc/run" do
         ash_remote_send_json(
@@ -55,7 +55,7 @@ defmodule AshRemote.Server.Router do
         |> Plug.Conn.send_resp(200, AshRemote.Server.manifest_json(@ash_remote_otp_app))
       end
 
-      get "/health", do: Plug.Conn.send_resp(var!(conn), 200, "ok")
+      get("/health", do: Plug.Conn.send_resp(var!(conn), 200, "ok"))
 
       match _ do
         ash_remote_send_json(

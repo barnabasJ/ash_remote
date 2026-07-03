@@ -59,7 +59,8 @@ defmodule AshRemote.Transport.Req do
     if Application.get_env(:ash_remote, :debug_requests, false) do
       req
       |> Req.Request.append_request_steps(
-        ash_remote_debug: &Req.Request.put_private(&1, :ash_remote_started, System.monotonic_time())
+        ash_remote_debug:
+          &Req.Request.put_private(&1, :ash_remote_started, System.monotonic_time())
       )
       |> Req.Request.append_response_steps(ash_remote_debug: &log_response/1)
       |> Req.Request.append_error_steps(ash_remote_debug: &log_error/1)

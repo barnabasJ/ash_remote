@@ -42,7 +42,8 @@ defmodule AshRemote.ProtocolTest do
 
   describe "parse_run/1" do
     test "success returns data" do
-      assert {:ok, [%{"id" => 1}]} = Protocol.parse_run(%{"success" => true, "data" => [%{"id" => 1}]})
+      assert {:ok, [%{"id" => 1}]} =
+               Protocol.parse_run(%{"success" => true, "data" => [%{"id" => 1}]})
     end
 
     test "failure returns errors" do

@@ -35,22 +35,53 @@ defmodule AshRemote.Gen.Validations do
     alias Ash.Resource.Validation, as: V
 
     case module do
-      V.StringLength -> attribute_and_rest(:string_length, opts)
-      V.ByteSize -> attribute_and_rest(:byte_size, opts)
-      V.Compare -> attribute_and_rest(:compare, opts)
-      V.Match -> {:ok, {:match, [opts[:attribute], regex(opts[:match])]}}
-      V.OneOf -> {:ok, {:one_of, [opts[:attribute], opts[:values]]}}
-      V.Present -> attributes_and_rest(:present, opts)
-      V.AttributesPresent -> attributes_and_rest(:attributes_present, opts)
-      V.Changing -> {:ok, {:changing, [opts[:field]]}}
-      V.ActionIs -> {:ok, {:action_is, [opts[:action]]}}
-      V.AttributeEquals -> {:ok, {:attribute_equals, [opts[:attribute], opts[:value]]}}
-      V.AttributeDoesNotEqual -> {:ok, {:attribute_does_not_equal, [opts[:attribute], opts[:value]]}}
-      V.ArgumentEquals -> {:ok, {:argument_equals, [opts[:argument], opts[:value]]}}
-      V.ArgumentDoesNotEqual -> {:ok, {:argument_does_not_equal, [opts[:argument], opts[:value]]}}
-      V.ArgumentIn -> {:ok, {:argument_in, [opts[:argument], opts[:list]]}}
-      V.Confirm -> {:ok, {:confirm, [opts[:field], opts[:confirmation]]}}
-      _ -> :error
+      V.StringLength ->
+        attribute_and_rest(:string_length, opts)
+
+      V.ByteSize ->
+        attribute_and_rest(:byte_size, opts)
+
+      V.Compare ->
+        attribute_and_rest(:compare, opts)
+
+      V.Match ->
+        {:ok, {:match, [opts[:attribute], regex(opts[:match])]}}
+
+      V.OneOf ->
+        {:ok, {:one_of, [opts[:attribute], opts[:values]]}}
+
+      V.Present ->
+        attributes_and_rest(:present, opts)
+
+      V.AttributesPresent ->
+        attributes_and_rest(:attributes_present, opts)
+
+      V.Changing ->
+        {:ok, {:changing, [opts[:field]]}}
+
+      V.ActionIs ->
+        {:ok, {:action_is, [opts[:action]]}}
+
+      V.AttributeEquals ->
+        {:ok, {:attribute_equals, [opts[:attribute], opts[:value]]}}
+
+      V.AttributeDoesNotEqual ->
+        {:ok, {:attribute_does_not_equal, [opts[:attribute], opts[:value]]}}
+
+      V.ArgumentEquals ->
+        {:ok, {:argument_equals, [opts[:argument], opts[:value]]}}
+
+      V.ArgumentDoesNotEqual ->
+        {:ok, {:argument_does_not_equal, [opts[:argument], opts[:value]]}}
+
+      V.ArgumentIn ->
+        {:ok, {:argument_in, [opts[:argument], opts[:list]]}}
+
+      V.Confirm ->
+        {:ok, {:confirm, [opts[:field], opts[:confirmation]]}}
+
+      _ ->
+        :error
     end
   end
 
@@ -102,7 +133,9 @@ defmodule AshRemote.Gen.Validations do
 
   defp render_regexes(other), do: other
 
-  defp regex({Spark.Regex, :cache, [source, flags]}), do: Regex.compile!(source, flags_string(flags))
+  defp regex({Spark.Regex, :cache, [source, flags]}),
+    do: Regex.compile!(source, flags_string(flags))
+
   defp regex(other), do: other
 
   defp flags_string(flags) when is_binary(flags), do: flags
@@ -200,8 +233,11 @@ defmodule AshRemote.Gen.Validations do
 
   # Meaning-level equality: option order doesn't matter, and a compiled
   # `~r//` equals Spark's lazy regex tuple for the same source/flags.
-  defp canonical({Spark.Regex, :cache, [source, flags]}), do: {:regex, source, flags_string(flags)}
-  defp canonical(%Regex{} = regex), do: {:regex, Regex.source(regex), to_string(Regex.opts(regex))}
+  defp canonical({Spark.Regex, :cache, [source, flags]}),
+    do: {:regex, source, flags_string(flags)}
+
+  defp canonical(%Regex{} = regex),
+    do: {:regex, Regex.source(regex), to_string(Regex.opts(regex))}
 
   defp canonical(list) when is_list(list) do
     if Keyword.keyword?(list) do

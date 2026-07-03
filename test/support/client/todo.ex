@@ -5,21 +5,21 @@ defmodule AshRemote.Client.Todo do
     data_layer: AshRemote.DataLayer
 
   attributes do
-    uuid_primary_key :id
-    attribute :title, :string, public?: true, allow_nil?: false
-    attribute :completed, :boolean, public?: true, default: false, allow_nil?: false
-    attribute :status, AshRemote.Backend.Todo.Status, public?: true
-    attribute :priority_score, AshRemote.Backend.PriorityScore, public?: true
-    attribute :due_date, :date, public?: true
+    uuid_primary_key(:id)
+    attribute(:title, :string, public?: true, allow_nil?: false)
+    attribute(:completed, :boolean, public?: true, default: false, allow_nil?: false)
+    attribute(:status, AshRemote.Backend.Todo.Status, public?: true)
+    attribute(:priority_score, AshRemote.Backend.PriorityScore, public?: true)
+    attribute(:due_date, :date, public?: true)
   end
 
   relationships do
-    belongs_to :user, AshRemote.Client.User, public?: true, attribute_writable?: true
-    has_many :comments, AshRemote.Client.Comment, public?: true
+    belongs_to(:user, AshRemote.Client.User, public?: true, attribute_writable?: true)
+    has_many(:comments, AshRemote.Client.Comment, public?: true)
   end
 
   aggregates do
-    count :comment_count, :comments, public?: true
+    count(:comment_count, :comments, public?: true)
   end
 
   calculations do
@@ -28,26 +28,26 @@ defmodule AshRemote.Client.Todo do
     # layer (`add_calculation`) instead of constant-folding it locally; the data
     # layer ignores the expression and folds the calc *name* into the RPC.
     calculate :is_overdue, :boolean, expr(completed) do
-      public? true
+      public?(true)
     end
 
     calculate :title_with_prefix, :string, expr(title) do
-      public? true
-      argument :prefix, :string, allow_nil?: false, default: ""
+      public?(true)
+      argument(:prefix, :string, allow_nil?: false, default: "")
     end
   end
 
   actions do
-    default_accept [:title, :completed, :status, :priority_score, :due_date, :user_id]
+    default_accept([:title, :completed, :status, :priority_score, :due_date, :user_id])
 
-    read :read, primary?: true
-    create :create, primary?: true
+    read(:read, primary?: true)
+    create(:create, primary?: true)
 
     update :update do
-      primary? true
-      require_atomic? false
+      primary?(true)
+      require_atomic?(false)
     end
 
-    destroy :destroy, primary?: true
+    destroy(:destroy, primary?: true)
   end
 end

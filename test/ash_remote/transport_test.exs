@@ -27,7 +27,8 @@ defmodule AshRemote.TransportTest do
   end
 
   test "validate: invalid input yields typed errors", %{config: config} do
-    body = Protocol.build_validate(%{resource: "AshRemote.Backend.Todo", action: "create", input: %{}})
+    body =
+      Protocol.build_validate(%{resource: "AshRemote.Backend.Todo", action: "create", input: %{}})
 
     assert {:ok, resp} = Transport.Req.request(config, :validate, body)
     assert {:error, errors} = Protocol.parse_validate(resp)

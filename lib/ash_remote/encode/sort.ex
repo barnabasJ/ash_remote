@@ -24,6 +24,20 @@ defmodule AshRemote.Encode.Sort do
   defp prefix(:asc_nils_first), do: "++"
   defp prefix(:desc_nils_last), do: "--"
 
+  # Sorting on a calculation arrives as a hydrated `%Ash.Query.Calculation{}`
+  # renamed to `:__calc__N` (ash/query/query.ex), but the original expression is
+  # kept in `opts[:expr]`. A `remote(...)` proxied calc must be sorted on the
+  # backend by its real name — pull it back out of the custom expression.
+  defp field_name(%Ash.Query.Calculation{opts: opts} = calc) when is_list(opts) do
+    case opts[:expr] do
+      %Ash.CustomExpression{module: AshRemote.Expressions.Remote, arguments: [name | _]} ->
+        name
+
+      _ ->
+        calc.calc_name || calc.name
+    end
+  end
+
   defp field_name(%{name: name}), do: name
   defp field_name(field) when is_atom(field), do: field
 end

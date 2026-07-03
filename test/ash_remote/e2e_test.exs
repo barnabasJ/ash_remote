@@ -144,16 +144,19 @@ defmodule AshRemote.E2ETest do
   end
 
   describe "remote calculations" do
-    test "mirrored expressions are real; the rest proxy through RemoteCalculation" do
+    test "mirrored and no-arg proxied calcs are expression calcs; parameterized proxy through RemoteCalculation" do
       assert {Ash.Resource.Calculation.Expression, _opts} =
                Ash.Resource.Info.calculation(mod(:Todo), :is_overdue).calculation
 
+      # No-arg proxied calcs (including aggregates) are emitted as `remote(...)`
+      # expression calcs so the backend can filter and sort on them.
+      assert {Ash.Resource.Calculation.Expression, _opts} =
+               Ash.Resource.Info.calculation(mod(:Todo), :comment_count).calculation
+
+      # Parameterized calcs still proxy through RemoteCalculation (the remote()
+      # arg flow + Ets/Simple resolve clause aren't wired yet).
       assert {AshRemote.RemoteCalculation, [calc: :title_with_prefix]} =
                Ash.Resource.Info.calculation(mod(:Todo), :title_with_prefix).calculation
-
-      # Aggregates are generated as calc fields and proxy the same way.
-      assert {AshRemote.RemoteCalculation, [calc: :comment_count]} =
-               Ash.Resource.Info.calculation(mod(:Todo), :comment_count).calculation
     end
 
     test "remote calculations loaded through a read are prefetched: one request total" do
@@ -171,7 +174,7 @@ defmodule AshRemote.E2ETest do
       assert TestBackend.rpc_count() == 1
     end
 
-    test "standalone Ash.load bundles all remote calculations into one request" do
+    test "standalone Ash.load resolves all remote calculations" do
       %{todo: todo} = seed()
       [record] = mod(:Todo) |> Ash.Query.filter(id == ^todo.id) |> Ash.read!()
       TestBackend.reset_rpc_count!()
@@ -180,7 +183,12 @@ defmodule AshRemote.E2ETest do
 
       assert loaded.comment_count == 1
       assert loaded.title_with_prefix == "B:Write code"
-      assert TestBackend.rpc_count() == 1
+
+      # Transitional: `comment_count` (now a remote() expr calc) resolves via an
+      # Ash.load re-read while `title_with_prefix` (still RemoteCalculation)
+      # bundles separately — two requests. Returns to one once parameterized
+      # calcs also become remote() (and share the re-read).
+      assert TestBackend.rpc_count() == 2
     end
 
     test "filtering on a mirrored expression calculation runs REAL semantics" do

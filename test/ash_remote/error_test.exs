@@ -4,7 +4,9 @@ defmodule AshRemote.ErrorTest do
   alias AshRemote.Error
 
   test "maps required errors to Ash.Error.Changes.Required preserving field" do
-    error = Error.to_exception(%{"type" => "required", "message" => "is required", "path" => ["title"]})
+    error =
+      Error.to_exception(%{"type" => "required", "message" => "is required", "path" => ["title"]})
+
     assert %Ash.Error.Changes.Required{field: :title} = error
   end
 
@@ -15,7 +17,9 @@ defmodule AshRemote.ErrorTest do
 
   test "maps not_found and forbidden" do
     assert %Ash.Error.Query.NotFound{} = Error.to_exception(%{"type" => "not_found"})
-    assert %Ash.Error.Forbidden.Policy{} = Error.to_exception(%{"type" => "forbidden", "message" => "no"})
+
+    assert %Ash.Error.Forbidden.Policy{} =
+             Error.to_exception(%{"type" => "forbidden", "message" => "no"})
   end
 
   test "unknown types fall back to UnknownError with the message" do

@@ -12,6 +12,7 @@ defmodule AshRemote.Manifest.LoaderTest do
 
   test "loads schema version and resources", %{manifest: manifest} do
     assert manifest.schema_version == "1.0.0"
+
     assert Map.keys(manifest.resources) |> Enum.sort() == [
              "AshRemote.Backend.Comment",
              "AshRemote.Backend.Todo",

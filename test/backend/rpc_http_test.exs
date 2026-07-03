@@ -65,6 +65,10 @@ defmodule AshRemote.Backend.RpcHttpTest do
 
   test "unknown resource is a typed error" do
     assert %{"success" => false, "errors" => [%{"type" => "unknown_resource"}]} =
-             run(%{"resource" => "AshRemote.Backend.Nope", "action" => "read", "fields" => ["id"]})
+             run(%{
+               "resource" => "AshRemote.Backend.Nope",
+               "action" => "read",
+               "fields" => ["id"]
+             })
   end
 end

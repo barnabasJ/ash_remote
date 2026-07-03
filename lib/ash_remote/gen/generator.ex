@@ -304,9 +304,9 @@ defmodule AshRemote.Gen do
     inner = "      public? true" <> if(args == "", do: "", else: "\n" <> args)
 
     # Mirrorable expressions become the real thing (locally evaluable,
-    # filterable, sortable). Everything else is proxied by name through
-    # AshRemote.RemoteCalculation — the server computes; Ash natively
-    # refuses filter/sort on expression-less Elixir calculations.
+    # filterable, sortable). Everything else is emitted as `remote(...)` — a
+    # pure expression calc the backend resolves by name (so it is filterable and
+    # sortable there), via the `AshRemote.Expressions.Remote` custom expression.
     implementation =
       cond do
         field.expression && AshRemote.Expression.safe?(field.expression) ->
@@ -315,6 +315,8 @@ defmodule AshRemote.Gen do
         field.arguments == [] ->
           ~s|expr(remote("#{name}"))|
 
+        # Parameterized calcs still proxy through RemoteCalculation for now —
+        # the remote() arg flow + the Ets/Simple resolve clause aren't done yet.
         true ->
           "{AshRemote.RemoteCalculation, calc: :#{name}}"
       end
