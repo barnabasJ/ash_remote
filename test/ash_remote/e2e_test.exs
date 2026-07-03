@@ -144,22 +144,26 @@ defmodule AshRemote.E2ETest do
   end
 
   describe "remote calculations" do
-    test "mirrored and no-arg proxied calcs are expression calcs; parameterized proxy through RemoteCalculation" do
+    test "mirrored and proxied calcs are all expression calcs so the backend can filter and sort" do
       assert {Ash.Resource.Calculation.Expression, _opts} =
                Ash.Resource.Info.calculation(mod(:Todo), :is_overdue).calculation
 
-      # No-arg proxied calcs (including aggregates) are emitted as `remote(...)`
+      # Proxied calcs (including aggregates) are emitted as `remote(...)`
       # expression calcs so the backend can filter and sort on them.
       assert {Ash.Resource.Calculation.Expression, _opts} =
                Ash.Resource.Info.calculation(mod(:Todo), :comment_count).calculation
 
-      # Parameterized calcs still proxy through RemoteCalculation (the remote()
-      # arg flow + Ets/Simple resolve clause aren't wired yet).
-      assert {AshRemote.RemoteCalculation, [calc: :title_with_prefix]} =
+      # Parameterized proxied calcs are also `remote(...)` expression calcs; their
+      # arguments flow through to the `/rpc/run` call so the backend computes the
+      # value with the given args.
+      assert {Ash.Resource.Calculation.Expression, _opts} =
                Ash.Resource.Info.calculation(mod(:Todo), :title_with_prefix).calculation
     end
 
-    test "remote calculations loaded through a read are prefetched: one request total" do
+    test "remote calculations loaded through a read resolve in one request total" do
+      # Both are `remote(...)` expression calcs, so Ash keeps them in the query
+      # and the data layer folds them into the same `/rpc/run` (loaded by name,
+      # with parameterized args forwarded) — one request for all of them.
       %{todo: todo} = seed()
       TestBackend.reset_rpc_count!()
 
@@ -184,11 +188,9 @@ defmodule AshRemote.E2ETest do
       assert loaded.comment_count == 1
       assert loaded.title_with_prefix == "B:Write code"
 
-      # Transitional: `comment_count` (now a remote() expr calc) resolves via an
-      # Ash.load re-read while `title_with_prefix` (still RemoteCalculation)
-      # bundles separately — two requests. Returns to one once parameterized
-      # calcs also become remote() (and share the re-read).
-      assert TestBackend.rpc_count() == 2
+      # Both calcs are now `remote(...)` expression calcs, so a standalone
+      # `Ash.load` resolves them in a single re-read through the data layer.
+      assert TestBackend.rpc_count() == 1
     end
 
     test "filtering on a mirrored expression calculation runs REAL semantics" do
@@ -205,16 +207,19 @@ defmodule AshRemote.E2ETest do
                |> Enum.map(& &1.title)
     end
 
-    test "filtering on a proxied module calculation is correct via runtime evaluation" do
-      # Without an expression Ash cannot push the filter; it fetches rows and
-      # filters in memory, invoking calculate/3 — whose values come from the
-      # server. Correct, at the cost of an extra (batched) request.
+    test "filtering on a proxied calculation is pushed to the backend" do
+      # `comment_count` is emitted as a `remote(...)` expression calc, so Ash
+      # keeps it in the query and the filter reduces to the calc name on the
+      # wire — the backend evaluates it with real semantics in one request. We
+      # never fetch rows to filter in memory.
       %{todo: todo} = seed()
+      TestBackend.reset_rpc_count!()
 
       assert [%{id: filtered_id}] =
                mod(:Todo) |> Ash.Query.filter(comment_count > 0) |> Ash.read!()
 
       assert filtered_id == todo.id
+      assert TestBackend.rpc_count() == 1
     end
   end
 end

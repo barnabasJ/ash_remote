@@ -57,8 +57,29 @@ defmodule AshRemote.Encode.Filter do
     op = Map.get(@op_names, mod) || raise_unsupported(mod)
     field = ref_name(ref)
     gate!(field, op, opts)
-    %{to_string(field) => %{op => value(right)}}
+
+    # A parameterized calculation carries its arguments; the backend's
+    # `filter_input` reads them from an `"input"` key alongside the operator.
+    predicate = %{op => value(right)}
+    predicate = maybe_put_input(predicate, ref)
+    %{to_string(field) => predicate}
   end
+
+  defp maybe_put_input(predicate, %Ref{attribute: %Ash.Query.Calculation{} = calc}) do
+    case calc_arguments(calc) do
+      args when args == %{} -> predicate
+      args -> Map.put(predicate, "input", stringify_keys(args))
+    end
+  end
+
+  defp maybe_put_input(predicate, _ref), do: predicate
+
+  defp calc_arguments(%Ash.Query.Calculation{context: %{arguments: args}}) when is_map(args),
+    do: args
+
+  defp calc_arguments(_), do: %{}
+
+  defp stringify_keys(map), do: Map.new(map, fn {k, v} -> {to_string(k), v} end)
 
   defp ref_name(%Ref{attribute: %{name: name}}), do: name
   defp ref_name(%Ref{attribute: name}) when is_atom(name), do: name

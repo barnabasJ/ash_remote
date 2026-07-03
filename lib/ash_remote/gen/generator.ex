@@ -295,7 +295,7 @@ defmodule AshRemote.Gen do
     |> Enum.map_join(fn {key, value} -> ", #{key}: :#{value}" end)
   end
 
-  defp calculation_block(name, field, _pk, ctx) do
+  defp calculation_block(name, field, pk, ctx) do
     args =
       Enum.map_join(field.arguments, "\n", fn arg ->
         "      argument :#{arg.name}, #{render_type(arg.type, ctx)}, allow_nil?: true"
@@ -307,18 +307,21 @@ defmodule AshRemote.Gen do
     # filterable, sortable). Everything else is emitted as `remote(...)` — a
     # pure expression calc the backend resolves by name (so it is filterable and
     # sortable there), via the `AshRemote.Expressions.Remote` custom expression.
+    # The primary key is passed so the expression references a real attribute
+    # and Ash routes the calc through the data layer instead of folding it to a
+    # literal (see `AshRemote.Expressions.Remote`).
     implementation =
       cond do
         field.expression && AshRemote.Expression.safe?(field.expression) ->
           "expr(#{field.expression})"
 
-        field.arguments == [] ->
-          ~s|expr(remote("#{name}"))|
-
-        # Parameterized calcs still proxy through RemoteCalculation for now —
-        # the remote() arg flow + the Ets/Simple resolve clause aren't done yet.
         true ->
-          "{AshRemote.RemoteCalculation, calc: :#{name}}"
+          arg_map =
+            Enum.map_join(field.arguments, ", ", fn arg ->
+              ~s|"#{arg.name}" => arg(:#{arg.name})|
+            end)
+
+          ~s|expr(remote("#{name}", %{#{arg_map}}, #{pk}))|
       end
 
     """
