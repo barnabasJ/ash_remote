@@ -107,7 +107,7 @@ defmodule AshRemote.DataLayer do
         page: Pagination.encode(query)
       })
 
-    with {:ok, response} <- request(cfg, :run, body),
+    with {:ok, response} <- request(cfg, :run, body, request_headers(query.context)),
          {:ok, data} <- Protocol.parse_run(response) do
       {:ok, Decoder.decode_records(data, resource, plan)}
     else
@@ -139,7 +139,7 @@ defmodule AshRemote.DataLayer do
         primary_key: primary_key(changeset)
       })
 
-    with {:ok, response} <- request(cfg, :run, body),
+    with {:ok, response} <- request(cfg, :run, body, request_headers(changeset.context)),
          {:ok, _data} <- Protocol.parse_run(response) do
       :ok
     else
@@ -148,7 +148,7 @@ defmodule AshRemote.DataLayer do
     end
   end
 
-  defp write(resource, _changeset, action_name, input, primary_key) do
+  defp write(resource, changeset, action_name, input, primary_key) do
     cfg = remote_config(resource)
     {fields, plan} = Decoder.write_fields(resource)
 
@@ -163,7 +163,7 @@ defmodule AshRemote.DataLayer do
         |> maybe_put(:primary_key, primary_key)
       )
 
-    with {:ok, response} <- request(cfg, :run, body),
+    with {:ok, response} <- request(cfg, :run, body, request_headers(changeset.context)),
          {:ok, data} <- Protocol.parse_run(response) do
       {:ok, Decoder.decode_record(data, resource, plan)}
     else
@@ -275,10 +275,28 @@ defmodule AshRemote.DataLayer do
 
   # --- transport / config --------------------------------------------------
 
-  defp request(cfg, path, body) do
+  defp request(cfg, path, body, extra_headers \\ []) do
     transport = Map.get(cfg, :transport) || Config.new(base_url: Map.fetch!(cfg, :base_url))
+    transport = %{transport | headers: transport.headers ++ extra_headers}
     module = transport.module || Transport.Req
     module.request(transport, path, body)
+  end
+
+  # Per-request headers forwarded from the Ash action context, e.g. an auth token:
+  #
+  #     Ash.read!(RemoteTodo, actor: user,
+  #       context: %{ash_remote: %{headers: %{"authorization" => "Bearer " <> token}}})
+  #
+  # The server's auth plug verifies them (ash_authentication) and sets the actor,
+  # so the RPC action authorizes as the calling user.
+  defp request_headers(context) do
+    case get_in(context || %{}, [:ash_remote, :headers]) do
+      headers when is_map(headers) ->
+        Enum.map(headers, fn {key, value} -> {to_string(key), to_string(value)} end)
+
+      _ ->
+        []
+    end
   end
 
   @doc """

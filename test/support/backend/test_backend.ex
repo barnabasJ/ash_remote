@@ -57,9 +57,18 @@ defmodule AshRemote.Backend.TestBackend do
     def call(%Plug.Conn{request_path: "/rpc/run"} = conn, opts) do
       counter = :persistent_term.get(:ash_remote_test_rpc_counter)
       :counters.add(counter, 1, 1)
-      AshRemote.Backend.RpcRouter.call(conn, opts)
+      conn |> put_actor() |> AshRemote.Backend.RpcRouter.call(opts)
     end
 
-    def call(conn, opts), do: AshRemote.Backend.RpcRouter.call(conn, opts)
+    def call(conn, opts), do: conn |> put_actor() |> AshRemote.Backend.RpcRouter.call(opts)
+
+    # Stand-in for a host auth plug (e.g. ash_authentication): turn a forwarded
+    # header into an actor via Ash.PlugHelpers, which AshRemote.Server.Router reads.
+    defp put_actor(conn) do
+      case Plug.Conn.get_req_header(conn, "x-test-actor-id") do
+        [actor_id | _] -> Ash.PlugHelpers.set_actor(conn, %{id: actor_id})
+        [] -> conn
+      end
+    end
   end
 end

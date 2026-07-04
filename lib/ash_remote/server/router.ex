@@ -36,15 +36,12 @@ defmodule AshRemote.Server.Router do
       plug(:dispatch)
 
       post "/rpc/run" do
-        client_id =
-          var!(conn)
-          |> Plug.Conn.get_req_header("x-ash-remote-client-id")
-          |> List.first()
-
         ash_remote_send_json(
           var!(conn),
-          AshRemote.Server.run_action(@ash_remote_otp_app, var!(conn).params,
-            client_id: client_id
+          AshRemote.Server.run_action(
+            @ash_remote_otp_app,
+            var!(conn).params,
+            ash_remote_request_opts(var!(conn))
           )
         )
       end
@@ -70,6 +67,19 @@ defmodule AshRemote.Server.Router do
           %{"success" => false, "errors" => [%{"type" => "not_found"}]},
           404
         )
+      end
+
+      # Resolve the actor/tenant/context from the conn — set by an upstream auth
+      # plug (e.g. ash_authentication) via `Ash.PlugHelpers` — plus the realtime
+      # echo-correlation id. Threaded into every RPC action so authorization and
+      # multitenancy apply exactly as they would for a local call.
+      defp ash_remote_request_opts(conn) do
+        [
+          actor: Ash.PlugHelpers.get_actor(conn),
+          tenant: Ash.PlugHelpers.get_tenant(conn),
+          context: Ash.PlugHelpers.get_context(conn),
+          client_id: conn |> Plug.Conn.get_req_header("x-ash-remote-client-id") |> List.first()
+        ]
       end
 
       defp ash_remote_send_json(conn, body, status \\ 200) do

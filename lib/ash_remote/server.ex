@@ -309,14 +309,14 @@ defmodule AshRemote.Server do
 
   # --- dispatch ------------------------------------------------------------
 
-  defp dispatch(resource, %{type: :read} = action, params, _opts) do
+  defp dispatch(resource, %{type: :read} = action, params, opts) do
     fields = params["fields"] || []
     {select, load} = Fields.to_select_and_load(resource, fields)
     input = Map.merge(params["input"] || %{}, params["primary_key"] || %{})
 
     query =
       resource
-      |> Ash.Query.for_read(action.name, input)
+      |> Ash.Query.for_read(action.name, input, subject_opts(opts))
       |> maybe(&Ash.Query.filter_input/2, params["filter"])
       |> maybe(&Ash.Query.sort_input/2, params["sort"])
       |> Ash.Query.select(select)
@@ -345,7 +345,7 @@ defmodule AshRemote.Server do
     {_select, load} = Fields.to_select_and_load(resource, fields)
 
     resource
-    |> Ash.Changeset.for_create(action.name, params["input"] || %{})
+    |> Ash.Changeset.for_create(action.name, params["input"] || %{}, subject_opts(opts))
     |> put_origin_context(opts)
     |> Ash.create!(load: load)
     |> then(&Fields.serialize(&1, resource, fields))
@@ -356,8 +356,8 @@ defmodule AshRemote.Server do
     {_select, load} = Fields.to_select_and_load(resource, fields)
 
     resource
-    |> fetch!(params["primary_key"])
-    |> Ash.Changeset.for_update(action.name, params["input"] || %{})
+    |> fetch!(params["primary_key"], opts)
+    |> Ash.Changeset.for_update(action.name, params["input"] || %{}, subject_opts(opts))
     |> put_origin_context(opts)
     |> Ash.update!(load: load)
     |> then(&Fields.serialize(&1, resource, fields))
@@ -365,12 +365,19 @@ defmodule AshRemote.Server do
 
   defp dispatch(resource, %{type: :destroy} = action, params, opts) do
     resource
-    |> fetch!(params["primary_key"])
-    |> Ash.Changeset.for_destroy(action.name, params["input"] || %{})
+    |> fetch!(params["primary_key"], opts)
+    |> Ash.Changeset.for_destroy(action.name, params["input"] || %{}, subject_opts(opts))
     |> put_origin_context(opts)
     |> Ash.destroy!()
 
     %{}
+  end
+
+  # Ash subject opts (actor/tenant/context) resolved from the request and
+  # threaded into every action so authorization and multitenancy apply.
+  defp subject_opts(opts) do
+    [actor: opts[:actor], tenant: opts[:tenant], context: opts[:context]]
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
   end
 
   # Stamp the realtime client-correlation id into the changeset context so
@@ -387,9 +394,9 @@ defmodule AshRemote.Server do
   defp get?(action, params),
     do: Map.get(action, :get?, false) or not is_nil(params["primary_key"])
 
-  defp fetch!(resource, primary_key) when is_map(primary_key) do
+  defp fetch!(resource, primary_key, opts) when is_map(primary_key) do
     key = Map.new(primary_key, fn {k, v} -> {String.to_existing_atom(to_string(k)), v} end)
-    Ash.get!(resource, key)
+    Ash.get!(resource, key, subject_opts(opts))
   end
 
   # Actions without pagination can still honor a limit/offset request (the
