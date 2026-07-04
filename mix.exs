@@ -30,8 +30,18 @@ defmodule AshRemote.MixProject do
       {:jason, "~> 1.4"},
       # A SAT solver Ash needs at runtime (ash lists these as optional).
       {:simple_sat, "~> 0.1"},
+      # Realtime transports — optional so downstream apps pull only their side
+      # (server: phoenix + phoenix_pubsub; client: slipstream). Fetched here for
+      # the library's own test suite (server socket/channel + client subscriber).
+      {:phoenix, "~> 1.7", optional: true},
+      {:phoenix_pubsub, "~> 2.1", optional: true},
+      {:slipstream, "~> 1.1", optional: true},
+      # `plug` backs the server Router macro (referenced only in its expansion)
+      # and the reference backend. Optional so downstream client apps skip it;
+      # made a plain optional dep (not `only:`) because the optional `phoenix`
+      # dep pulls `plug` in all envs and an `:only` restriction diverges.
+      {:plug, "~> 1.16", optional: true},
       # Reference-backend HTTP server (test/dev only).
-      {:plug, "~> 1.16", only: [:dev, :test]},
       {:bandit, "~> 1.5", only: [:dev, :test]}
     ]
   end
