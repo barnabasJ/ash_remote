@@ -26,15 +26,22 @@ if Code.ensure_loaded?(Slipstream) do
       client_id = ClientId.register(opts.http_base_url)
       inbound = Map.put(opts.inbound, :client_id, client_id)
 
+      # connect_params (e.g. an auth token) are evaluated per connect and go on
+      # BOTH the socket connect query string — where the server's `connect/3`
+      # reads them to authenticate the connection (the ash_authentication hook) —
+      # and the channel join payload.
+      params = eval(opts.connect_params)
+
       socket =
         new_socket()
         |> assign(:opts, opts)
         |> assign(:inbound, inbound)
+        |> assign(:join_params, params)
         |> assign(:joined, MapSet.new())
         |> assign(:ready?, false)
 
       case connect(socket,
-             uri: opts.uri,
+             uri: with_query(opts.uri, params),
              reconnect_after_msec: opts.reconnect_after_msec,
              rejoin_after_msec: opts.rejoin_after_msec
            ) do
@@ -45,11 +52,9 @@ if Code.ensure_loaded?(Slipstream) do
 
     @impl Slipstream
     def handle_connect(socket) do
-      params = eval(socket.assigns.opts.connect_params)
-
       socket =
         Enum.reduce(socket.assigns.opts.topics, socket, fn topic, socket ->
-          join(socket, topic, params)
+          join(socket, topic, socket.assigns.join_params)
         end)
 
       {:ok, socket}
@@ -133,11 +138,28 @@ if Code.ensure_loaded?(Slipstream) do
       :ok
     end
 
-    # connect_params evaluated per connect — fresh tokens on reconnect.
+    # connect_params evaluated per connect — fresh tokens on (re)connect and on
+    # supervisor restart.
     defp eval({module, fun, args}), do: apply(module, fun, args)
     defp eval(fun) when is_function(fun, 0), do: fun.()
     defp eval(params) when is_map(params), do: params
     defp eval(nil), do: %{}
+
+    # Merge params into the ws URI query string, so they arrive as `params` in the
+    # server socket's `connect/3`.
+    defp with_query(uri, params) when map_size(params) == 0, do: uri
+
+    defp with_query(uri, params) do
+      parsed = URI.parse(uri)
+
+      query =
+        (parsed.query || "")
+        |> URI.decode_query()
+        |> Map.merge(Map.new(params, fn {k, v} -> {to_string(k), to_string(v)} end))
+        |> URI.encode_query()
+
+      URI.to_string(%{parsed | query: query})
+    end
   end
 else
   defmodule AshRemote.Realtime.Connection do
