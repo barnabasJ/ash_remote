@@ -32,6 +32,8 @@ defmodule Mix.Tasks.AshRemote.Gen do
   """
   use Igniter.Mix.Task
 
+  @aggregate_calls [:count, :sum, :avg, :min, :max, :first, :list, :exists, :custom]
+
   @impl Igniter.Mix.Task
   def info(_argv, _parent) do
     %Igniter.Mix.Task.Info{
@@ -90,6 +92,7 @@ defmodule Mix.Tasks.AshRemote.Gen do
     |> ensure_all(entities.relationships, module, &Ash.Resource.Igniter.add_new_relationship/4)
     |> ensure_all(entities.validations, module, &add_new_validation/4)
     |> ensure_all(entities.calculations, module, &add_new_calculation/4)
+    |> ensure_all(entities.aggregates, module, &add_new_aggregate/4)
     |> ensure_all(entities.actions, module, &Ash.Resource.Igniter.add_new_action/4)
   end
 
@@ -145,6 +148,40 @@ defmodule Mix.Tasks.AshRemote.Gen do
       Ash.Resource.Igniter.add_calculation(igniter, module, code)
     end
   end
+
+  defp add_new_aggregate(igniter, module, name, code) do
+    {igniter, defines?} = defines_aggregate(igniter, module, name)
+
+    if defines? do
+      igniter
+    else
+      Ash.Resource.Igniter.add_block(igniter, module, :aggregates, code)
+    end
+  end
+
+  # An aggregate call (`count`, `sum`, …) for `name` already in the section.
+  # Scanning statements (rather than `move_to_function_call_…`) lets us match on
+  # any of the kind calls without threading igniter through each.
+  defp defines_aggregate(igniter, module, name) do
+    Spark.Igniter.find(igniter, module, fn _, zipper ->
+      with {:ok, zipper} <- enter_section(zipper, :aggregates),
+           true <- Enum.any?(statements(zipper), &aggregate_named?(&1, name)) do
+        {:ok, true}
+      else
+        _ -> :error
+      end
+    end)
+    |> case do
+      {:ok, igniter, _module, _value} -> {igniter, true}
+      {:error, igniter} -> {igniter, false}
+    end
+  end
+
+  defp aggregate_named?({call, _, [_ | _]} = stmt, name)
+       when call in @aggregate_calls,
+       do: entity_name(stmt) == name
+
+  defp aggregate_named?(_stmt, _name), do: false
 
   # Validations have no name to key on — identity is the definition itself.
   # One that matches a manifest validation node-for-node already exists;
@@ -239,6 +276,7 @@ defmodule Mix.Tasks.AshRemote.Gen do
     ],
     relationships: [:belongs_to, :has_many, :has_one, :many_to_many],
     calculations: [:calculate],
+    aggregates: @aggregate_calls,
     actions: [:read, :create, :update, :destroy, :action]
   ]
 

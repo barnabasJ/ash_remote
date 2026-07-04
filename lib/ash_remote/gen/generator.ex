@@ -84,6 +84,7 @@ defmodule AshRemote.Gen do
     relationships = section(:relationships, entities.relationships, always?: true)
     validations = section(:validations, entities.validations, gap?: true)
     calculations = section(:calculations, entities.calculations, gap?: true)
+    aggregates = section(:aggregates, entities.aggregates, gap?: true)
     actions = gen_actions(res)
     remote = gen_remote(res, ctx)
 
@@ -98,7 +99,7 @@ defmodule AshRemote.Gen do
       #{remote}
 
       #{attributes}
-      #{relationships}#{validations}#{calculations}
+      #{relationships}#{validations}#{calculations}#{aggregates}
       #{actions}
       end
       """
@@ -126,11 +127,23 @@ defmodule AshRemote.Gen do
       |> Enum.map(fn {name, rel} -> {String.to_atom(name), relationship_line(name, rel, ctx)} end)
       |> Enum.reject(fn {_name, line} -> line == "" end)
 
-    calculations =
+    # Reproducible aggregates (relationship + optional mirrorable filter carried
+    # by the manifest) become NATIVE client aggregates, so a caching data layer
+    # can fold them from the related rows. Everything else — opaque calcs and
+    # non-reproducible aggregates — stays a `remote(...)` proxy calc.
+    {native_aggregates, calc_like} =
       res
       |> loadable_fields()
-      |> Enum.map(fn {name, field} ->
+      |> Enum.split_with(fn {_name, field} -> reproducible_aggregate?(field) end)
+
+    calculations =
+      Enum.map(calc_like, fn {name, field} ->
         {String.to_atom(name), calculation_block(name, field, pk, ctx)}
+      end)
+
+    aggregates =
+      Enum.map(native_aggregates, fn {name, field} ->
+        {String.to_atom(name), aggregate_block(name, field)}
       end)
 
     actions =
@@ -143,6 +156,7 @@ defmodule AshRemote.Gen do
       relationships: relationships,
       validations: validation_entities(res),
       calculations: calculations,
+      aggregates: aggregates,
       actions: actions
     }
   end
@@ -327,6 +341,33 @@ defmodule AshRemote.Gen do
     """
         calculate :#{name}, #{render_type(field.type, ctx)}, #{implementation} do
     #{inner}
+        end
+    """
+    |> String.trim_trailing()
+  end
+
+  # A manifest aggregate field is reproducible on the client when the server
+  # injected its relationship (a single-hop relationship the client mirrors) —
+  # and, if it has a filter, that filter mirrored too.
+  defp reproducible_aggregate?(%{kind: :aggregate, relationship: relationship})
+       when not is_nil(relationship),
+       do: true
+
+  defp reproducible_aggregate?(_field), do: false
+
+  # A native client aggregate: `count :name, :relationship [, :field] do ... end`
+  # (with the sum/avg field arg only when present, and a mirrored filter when
+  # the server carried one). A caching data layer can fold this from the related
+  # rows instead of round-tripping to the server.
+  defp aggregate_block(name, field) do
+    field_arg = if field.aggregate_field, do: ", :#{field.aggregate_field}", else: ""
+
+    filter_line =
+      if field.aggregate_filter, do: "\n      filter expr(#{field.aggregate_filter})", else: ""
+
+    """
+        #{field.aggregate_kind} :#{name}, :#{field.relationship}#{field_arg} do
+          public? true#{filter_line}
         end
     """
     |> String.trim_trailing()

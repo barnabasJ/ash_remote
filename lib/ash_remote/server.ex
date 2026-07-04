@@ -69,6 +69,7 @@ defmodule AshRemote.Server do
         |> Map.update("relationships", %{}, &inject_relationship_attributes(&1, module))
         |> Map.put("validations", serialize_validations(module))
         |> Map.update("fields", %{}, &inject_calculation_expressions(&1, module))
+        |> Map.update("fields", %{}, &inject_aggregate_metadata(&1, module))
       end)
 
     map
@@ -154,6 +155,52 @@ defmodule AshRemote.Server do
       end
     end)
   end
+
+  # Ash's manifest flattens an aggregate to {name, type, aggregate_kind},
+  # dropping the relationship/field/filter — so the client can't reconstruct a
+  # native aggregate. Inject that metadata for aggregates that are REPRODUCIBLE
+  # on the client: a single-hop relationship (mirrored on the client) and, if
+  # present, a filter that mirrors (scoped to the DESTINATION resource, whose
+  # attributes the filter references). Anything else is left untouched and stays
+  # a `remote(...)` proxy calc. This is the aggregate analogue of
+  # `inject_calculation_expressions`.
+  defp inject_aggregate_metadata(fields, module) do
+    Map.new(fields, fn {name, field_map} ->
+      case aggregate_metadata(module, name) do
+        {:ok, meta} -> {name, Map.merge(field_map, meta)}
+        :error -> {name, field_map}
+      end
+    end)
+  end
+
+  defp aggregate_metadata(module, name) do
+    with %Ash.Resource.Aggregate{relationship_path: [relationship], field: field, filter: filter} <-
+           Ash.Resource.Info.aggregate(module, String.to_existing_atom(name)),
+         %{destination: destination} <- Ash.Resource.Info.relationship(module, relationship),
+         {:ok, filter_meta} <- encode_aggregate_filter(filter, destination) do
+      meta =
+        %{"relationship" => to_string(relationship)}
+        |> put_present("aggregate_field", field && to_string(field))
+        |> Map.merge(filter_meta)
+
+      {:ok, meta}
+    else
+      _ -> :error
+    end
+  end
+
+  # An aggregate with no filter carries `nil` or `[]` (the DSL default).
+  defp encode_aggregate_filter(empty, _destination) when empty in [nil, []], do: {:ok, %{}}
+
+  defp encode_aggregate_filter(filter, destination) do
+    case AshRemote.Expression.encode(filter, destination) do
+      {:ok, code} -> {:ok, %{"aggregate_filter" => code}}
+      :error -> :error
+    end
+  end
+
+  defp put_present(map, _key, nil), do: map
+  defp put_present(map, key, value), do: Map.put(map, key, value)
 
   defp inject_relationship_attributes(relationships, module) do
     Map.new(relationships, fn {name, rel_map} ->

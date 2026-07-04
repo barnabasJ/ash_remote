@@ -157,6 +157,9 @@ defmodule AshRemote.Manifest.Loader do
       sensitive?: field["sensitive"] || false,
       select_by_default?: Map.get(field, "select_by_default", true),
       expression: field["expression"],
+      relationship: field["relationship"],
+      aggregate_field: field["aggregate_field"],
+      aggregate_filter: field["aggregate_filter"],
       arguments: normalize_arguments(field["arguments"]),
       filter_operators: normalize_applicable(field["filter_operators"]),
       filter_functions: normalize_applicable(field["filter_functions"])

@@ -72,6 +72,13 @@ defmodule AshRemote.Manifest.Field do
     sensitive?: false,
     select_by_default?: true,
     expression: nil,
+    # Reproducible-aggregate metadata (populated only for aggregate fields whose
+    # relationship + optional filter can be mirrored on the client). When
+    # `relationship` is set the generator emits a NATIVE aggregate; otherwise the
+    # aggregate is proxied as a `remote(...)` calc like any other opaque field.
+    relationship: nil,
+    aggregate_field: nil,
+    aggregate_filter: nil,
     arguments: [],
     filter_operators: [],
     filter_functions: []

@@ -148,10 +148,12 @@ defmodule AshRemote.E2ETest do
       assert {Ash.Resource.Calculation.Expression, _opts} =
                Ash.Resource.Info.calculation(mod(:Todo), :is_overdue).calculation
 
-      # Proxied calcs (including aggregates) are emitted as `remote(...)`
-      # expression calcs so the backend can filter and sort on them.
-      assert {Ash.Resource.Calculation.Expression, _opts} =
-               Ash.Resource.Info.calculation(mod(:Todo), :comment_count).calculation
+      # A reproducible relationship aggregate is now a NATIVE aggregate (a
+      # caching data layer can fold it), not a `remote(...)` proxy calc.
+      assert %Ash.Resource.Aggregate{kind: :count} =
+               Ash.Resource.Info.aggregate(mod(:Todo), :comment_count)
+
+      refute Ash.Resource.Info.calculation(mod(:Todo), :comment_count)
 
       # Parameterized proxied calcs are also `remote(...)` expression calcs; their
       # arguments flow through to the `/rpc/run` call so the backend computes the
@@ -161,9 +163,9 @@ defmodule AshRemote.E2ETest do
     end
 
     test "remote calculations loaded through a read resolve in one request total" do
-      # Both are `remote(...)` expression calcs, so Ash keeps them in the query
-      # and the data layer folds them into the same `/rpc/run` (loaded by name,
-      # with parameterized args forwarded) — one request for all of them.
+      # `comment_count` is a native aggregate and `title_with_prefix` a
+      # `remote(...)` calc; the data layer folds both into the same `/rpc/run`
+      # (loaded by name, with parameterized args forwarded) — one request total.
       %{todo: todo} = seed()
       TestBackend.reset_rpc_count!()
 
@@ -188,8 +190,8 @@ defmodule AshRemote.E2ETest do
       assert loaded.comment_count == 1
       assert loaded.title_with_prefix == "B:Write code"
 
-      # Both calcs are now `remote(...)` expression calcs, so a standalone
-      # `Ash.load` resolves them in a single re-read through the data layer.
+      # A native aggregate + a `remote(...)` calc both resolve in a single
+      # re-read through the data layer (loaded by name in one `/rpc/run`).
       assert TestBackend.rpc_count() == 1
     end
 

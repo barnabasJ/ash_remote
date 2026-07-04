@@ -20,6 +20,13 @@ defmodule AshRemote.GenTest do
     |> Map.fetch!(:source)
   end
 
+  defp update_todo_field(manifest, name, fun) do
+    key = "AshRemote.Backend.Todo"
+    todo = manifest.resources[key]
+    todo = %{todo | fields: Map.update!(todo.fields, name, fun)}
+    %{manifest | resources: Map.put(manifest.resources, key, todo)}
+  end
+
   describe "validations" do
     test "the generated resource contains the mirrored validations, in sugar form", %{
       manifest: manifest
@@ -70,6 +77,48 @@ defmodule AshRemote.GenTest do
       refute source =~ "present(:status)"
       # the legitimate ones are still there
       assert source =~ "validate string_length(:title, min: 3)"
+    end
+  end
+
+  describe "aggregates" do
+    test "a reproducible relationship aggregate becomes a NATIVE client aggregate", %{
+      manifest: manifest
+    } do
+      source = todo_source(manifest)
+
+      # emitted as the real thing (foldable by a caching data layer), in an
+      # `aggregates do` block — not proxied as an opaque `remote(...)` calc.
+      assert source =~ "aggregates do"
+      assert source =~ ~r/count :comment_count, :comments do/
+      refute source =~ ~s|remote("comment_count"|
+    end
+
+    test "an aggregate whose relationship didn't mirror stays a remote() proxy calc", %{
+      manifest: manifest
+    } do
+      # Without the injected relationship (e.g. a multi-hop path or a
+      # non-mirrorable filter on the server), the aggregate is not reproducible.
+      manifest = update_todo_field(manifest, "comment_count", &%{&1 | relationship: nil})
+      source = todo_source(manifest)
+
+      refute source =~ ~r/count :comment_count, :comments/
+      assert source =~ ~s|remote("comment_count"|
+    end
+
+    test "a mirrored aggregate filter is rendered into the native aggregate", %{
+      manifest: manifest
+    } do
+      manifest =
+        update_todo_field(
+          manifest,
+          "comment_count",
+          &%{&1 | aggregate_filter: "not is_nil(body)"}
+        )
+
+      source = todo_source(manifest)
+
+      assert source =~ ~r/count :comment_count, :comments do/
+      assert source =~ "filter expr(not is_nil(body))"
     end
   end
 end
