@@ -3,9 +3,19 @@ defmodule AshRemote.Rpc.Exposed do
   defstruct [:action, :__spark_metadata__]
 end
 
+defmodule AshRemote.Rpc.Publish do
+  @moduledoc false
+  defstruct [:action, :__spark_metadata__]
+end
+
+defmodule AshRemote.Rpc.NoPublish do
+  @moduledoc false
+  defstruct [:action, :__spark_metadata__]
+end
+
 defmodule AshRemote.Rpc.ResourceEntry do
   @moduledoc false
-  defstruct [:resource, :__spark_metadata__, expose: []]
+  defstruct [:resource, :__spark_metadata__, expose: [], publish: [], no_publish: []]
 end
 
 defmodule AshRemote.Rpc do
@@ -17,11 +27,15 @@ defmodule AshRemote.Rpc do
         use Ash.Domain, extensions: [AshRemote.Rpc]
 
         rpc do
+          pub_sub MyAppWeb.Endpoint
+
           resource MyApp.Todo do
             expose :read
             expose :create
             expose :update
             expose :destroy
+            publish :internal_touch   # opt an unexposed action IN to realtime
+            no_publish :create        # opt an exposed action OUT (always wins)
           end
 
           resource MyApp.User do
@@ -34,6 +48,15 @@ defmodule AshRemote.Rpc do
   pairs, and the published manifest describes exactly this surface. Actions are
   addressed on the wire by `{resource, action}`, so no per-action RPC name is
   needed.
+
+  ## Realtime publications
+
+  When a resource attaches `AshRemote.Server.Notifier`, its mutation actions are
+  broadcast to subscribed clients. The published set is
+  `(exposed ∪ publish) ∖ no_publish` — exposing an action publishes it by
+  default, `publish` opts an otherwise-unexposed action in, and `no_publish`
+  always wins. `pub_sub` names the module (e.g. a `Phoenix.Endpoint`) the
+  notifier broadcasts through.
   """
 
   @expose %Spark.Dsl.Entity{
@@ -44,12 +67,28 @@ defmodule AshRemote.Rpc do
     schema: [action: [type: :atom, required: true, doc: "The action name to expose."]]
   }
 
+  @publish %Spark.Dsl.Entity{
+    name: :publish,
+    describe: "Opt an action IN to realtime publication (even if it is not exposed).",
+    target: AshRemote.Rpc.Publish,
+    args: [:action],
+    schema: [action: [type: :atom, required: true, doc: "The action name to publish."]]
+  }
+
+  @no_publish %Spark.Dsl.Entity{
+    name: :no_publish,
+    describe: "Opt an action OUT of realtime publication (always wins over expose/publish).",
+    target: AshRemote.Rpc.NoPublish,
+    args: [:action],
+    schema: [action: [type: :atom, required: true, doc: "The action name to never publish."]]
+  }
+
   @resource %Spark.Dsl.Entity{
     name: :resource,
     describe: "Declare the exposed actions for a resource.",
     target: AshRemote.Rpc.ResourceEntry,
     args: [:resource],
-    entities: [expose: [@expose]],
+    entities: [expose: [@expose], publish: [@publish], no_publish: [@no_publish]],
     schema: [
       resource: [type: {:spark, Ash.Resource}, required: true, doc: "The resource being exposed."]
     ]
@@ -58,8 +97,18 @@ defmodule AshRemote.Rpc do
   @rpc %Spark.Dsl.Section{
     name: :rpc,
     describe: "Declare the RPC-exposed surface of this domain.",
+    schema: [
+      pub_sub: [
+        type: :atom,
+        required: false,
+        doc:
+          "A module exporting `broadcast/3` (e.g. a `Phoenix.Endpoint`) that " <>
+            "`AshRemote.Server.Notifier` publishes realtime notifications through."
+      ]
+    ],
+    no_depend_modules: [:pub_sub],
     entities: [@resource]
   }
 
-  use Spark.Dsl.Extension, sections: [@rpc]
+  use Spark.Dsl.Extension, sections: [@rpc], verifiers: [AshRemote.Rpc.Verifiers.ValidatePublish]
 end
