@@ -1,29 +1,28 @@
 defmodule TodoServer.Domain do
-  @moduledoc "The todo backend domain — its RPC-exposed surface."
+  @moduledoc "The todo backend domain — its RPC-exposed and realtime-published surface."
   use Ash.Domain, extensions: [AshRemote.Rpc]
 
   resources do
-    resource TodoServer.User
-    resource TodoServer.TodoList
-    resource TodoServer.Todo
+    resource(TodoServer.TodoList)
+    resource(TodoServer.Todo)
   end
 
   rpc do
-    resource TodoServer.Todo do
-      expose :read
-      expose :create
-      expose :update
-      expose :destroy
-    end
+    # Realtime notifications are broadcast through the Phoenix endpoint.
+    pub_sub(TodoServer.Endpoint)
 
     resource TodoServer.TodoList do
-      expose :read
-      expose :create
+      expose(:read)
+      expose(:create)
+      expose(:update)
+      expose(:destroy)
     end
 
-    resource TodoServer.User do
-      expose :read
-      expose :create
+    resource TodoServer.Todo do
+      expose(:read)
+      expose(:create)
+      expose(:update)
+      expose(:destroy)
     end
   end
 end

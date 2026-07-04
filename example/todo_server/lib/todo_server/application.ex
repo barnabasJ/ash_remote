@@ -9,49 +9,64 @@ defmodule TodoServer.Application do
     port = Application.get_env(:todo_server, :port, 4010)
 
     children = [
-      {Bandit, plug: TodoServer.RpcRouter, port: port}
+      {Phoenix.PubSub, name: TodoServer.PubSub},
+      {AshAuthentication.Supervisor, [otp_app: :todo_server]},
+      TodoServer.Endpoint
     ]
 
     opts = [strategy: :one_for_one, name: TodoServer.Supervisor]
 
     with {:ok, pid} <- Supervisor.start_link(children, opts) do
       seed()
-      Logger.info("todo_server listening on http://127.0.0.1:#{port} (manifest at /manifest.json)")
+
+      Logger.info(
+        "todo_server on http://127.0.0.1:#{port} — RPC at /rpc/*, manifest at /manifest.json, " <>
+          "socket at /ash_remote/socket. Demo users: ada@example.com / grace@example.com (password: password123)."
+      )
+
       {:ok, pid}
     end
   end
 
-  # Seed demo users, lists and todos once, if the store is empty.
+  # Seed two demo users, each with a couple of todos, once, if the store is empty.
   defp seed do
-    if Ash.count!(TodoServer.Todo) == 0 do
-      ada = Ash.create!(TodoServer.User, %{name: "Ada"})
-      grace = Ash.create!(TodoServer.User, %{name: "Grace"})
+    if Ash.count!(TodoServer.Accounts.User, authorize?: false) == 0 do
+      ada = register("ada@example.com")
+      grace = register("grace@example.com")
 
-      errands = Ash.create!(TodoServer.TodoList, %{name: "Errands", user_id: ada.id})
-      launch = Ash.create!(TodoServer.TodoList, %{name: "Launch", user_id: grace.id})
+      errands = create_list(ada, "Errands")
+      launch = create_list(grace, "Launch")
 
-      Ash.create!(TodoServer.Todo, %{title: "Buy milk", priority: :low, list_id: errands.id})
-
-      Ash.create!(TodoServer.Todo, %{
-        title: "Renew passport",
-        priority: :medium,
-        due_date: ~D[2020-01-01],
-        list_id: errands.id
-      })
-
-      Ash.create!(TodoServer.Todo, %{
-        title: "Pick a name",
-        priority: :medium,
-        completed: true,
-        list_id: launch.id
-      })
-
-      ship = Ash.create!(TodoServer.Todo, %{title: "Ship ash_remote", priority: :high, list_id: launch.id})
-
-      Ash.create!(TodoServer.Todo, %{title: "Write the changelog", priority: :high, parent_id: ship.id})
-      Ash.create!(TodoServer.Todo, %{title: "Tag the release", priority: :medium, parent_id: ship.id})
+      create_todo(ada, "Buy milk", :low, errands)
+      create_todo(ada, "Renew passport", :medium, errands)
+      create_todo(grace, "Ship ash_remote", :high, launch)
+      create_todo(grace, "Write the changelog", :high, launch)
     end
   rescue
     error -> Logger.warning("seed skipped: #{inspect(error)}")
+  end
+
+  defp register(email) do
+    TodoServer.Accounts.User
+    |> Ash.Changeset.for_create(:register_with_password, %{
+      email: email,
+      password: "password123",
+      password_confirmation: "password123"
+    })
+    |> Ash.create!(authorize?: false)
+  end
+
+  defp create_list(user, name) do
+    TodoServer.TodoList
+    |> Ash.Changeset.for_create(:create, %{name: name}, actor: user)
+    |> Ash.create!(actor: user)
+  end
+
+  defp create_todo(user, title, priority, list) do
+    TodoServer.Todo
+    |> Ash.Changeset.for_create(:create, %{title: title, priority: priority, list_id: list.id},
+      actor: user
+    )
+    |> Ash.create!(actor: user)
   end
 end

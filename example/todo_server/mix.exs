@@ -43,7 +43,7 @@ defmodule TodoServer.MixProject do
       {:igniter, "~> 0.6"},
       # Authentication authority: users, password strategy, JWT tokens. Verified
       # on both the RPC plug and the realtime socket connect.
-      {:ash_authentication, "~> 4.14"},
+      {:ash_authentication, "~> 4.0"},
       {:bcrypt_elixir, "~> 3.0"},
       {:simple_sat, "~> 0.1"},
       # Phoenix hosts the realtime socket (and, via Bandit.PhoenixAdapter, the RPC

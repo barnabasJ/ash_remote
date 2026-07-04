@@ -1,49 +1,87 @@
 defmodule TodoServer.Todo do
-  @moduledoc false
-  use Ash.Resource, domain: TodoServer.Domain, data_layer: Ash.DataLayer.Ets
+  @moduledoc """
+  A todo owned by the authenticated user. Read/update/destroy are owner-only —
+  enforced on both RPC and realtime delivery — and create relates the row to the
+  actor. `AshRemote.Server.Notifier` replicates changes to subscribed clients.
+  """
+  use Ash.Resource,
+    domain: TodoServer.Domain,
+    data_layer: Ash.DataLayer.Ets,
+    authorizers: [Ash.Policy.Authorizer],
+    notifiers: [AshRemote.Server.Notifier]
 
   ets do
-    private? false
+    private?(false)
+  end
+
+  policies do
+    # A user may only see and change their own todos.
+    policy action_type([:read, :update, :destroy]) do
+      authorize_if(relates_to_actor_via(:user))
+    end
+
+    policy action_type(:create) do
+      authorize_if(actor_present())
+    end
   end
 
   attributes do
-    uuid_primary_key :id
-    attribute :title, :string, public?: true, allow_nil?: false
-    attribute :completed, :boolean, public?: true, default: false, allow_nil?: false
-    attribute :priority, TodoServer.Priority, public?: true, default: :medium
-    attribute :due_date, :date, public?: true
-    create_timestamp :inserted_at, public?: true
+    uuid_primary_key(:id)
+    attribute(:title, :string, public?: true, allow_nil?: false)
+    attribute(:completed, :boolean, public?: true, default: false, allow_nil?: false)
+    attribute(:priority, TodoServer.Priority, public?: true, default: :medium)
+    attribute(:due_date, :date, public?: true)
+    create_timestamp(:inserted_at, public?: true)
   end
 
   relationships do
-    belongs_to :list, TodoServer.TodoList, public?: true, attribute_writable?: true
-    belongs_to :parent, TodoServer.Todo, public?: true, attribute_writable?: true
-    has_many :subtasks, TodoServer.Todo, public?: true, destination_attribute: :parent_id
+    # Private: ownership is a server concern (set from the actor, enforced by
+    # policy). The client never sees the owner, so User stays off the wire.
+    belongs_to :user, TodoServer.Accounts.User do
+      allow_nil?(false)
+    end
+
+    belongs_to :list, TodoServer.TodoList do
+      public?(true)
+      attribute_writable?(true)
+    end
+
+    belongs_to :parent, TodoServer.Todo do
+      public?(true)
+      attribute_writable?(true)
+    end
+
+    has_many :subtasks, TodoServer.Todo do
+      public?(true)
+      destination_attribute(:parent_id)
+    end
+  end
+
+  actions do
+    default_accept([:title, :completed, :priority, :due_date, :list_id, :parent_id])
+
+    read :read do
+      primary?(true)
+    end
+
+    create :create do
+      primary?(true)
+      change(relate_actor(:user))
+    end
+
+    update(:update, primary?: true)
+    destroy(:destroy, primary?: true)
   end
 
   validations do
-    # Mirrored onto the generated client resource: forms validate this
-    # without a round trip; the server still enforces it on every write.
-    validate string_length(:title, min: 3)
+    validate(string_length(:title, min: 3))
   end
 
   calculations do
     calculate :overdue?,
               :boolean,
               expr(not is_nil(due_date) and due_date < today() and not completed) do
-      public? true
+      public?(true)
     end
-  end
-
-  actions do
-    default_accept [:title, :completed, :priority, :due_date, :list_id, :parent_id]
-
-    read :read do
-      primary? true
-    end
-
-    create :create, primary?: true
-    update :update, primary?: true
-    destroy :destroy, primary?: true
   end
 end
