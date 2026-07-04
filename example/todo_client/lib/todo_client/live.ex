@@ -36,12 +36,13 @@ defmodule TodoClient.Live do
   end
 
   @impl true
-  def handle_event("add_todo", %{"title" => title, "list_id" => list_id} = params, socket) do
-    # A todo in a public list is public too, so it's shared like the rest of the list.
-    public = params["public"] == "true" or list_public?(socket, list_id)
-
+  def handle_event("add_todo", %{"title" => title, "list_id" => list_id}, socket) do
+    # A todo inherits its list's visibility: everything in a public list is
+    # shared, everything in a private list is owner-only.
     Todo
-    |> Ash.Changeset.for_create(:create, %{title: title, list_id: list_id, public: public},
+    |> Ash.Changeset.for_create(
+      :create,
+      %{title: title, list_id: list_id, public: list_public?(socket, list_id)},
       actor: actor()
     )
     |> Ash.create()
@@ -114,7 +115,6 @@ defmodule TodoClient.Live do
             <span style={todo.completed && "text-decoration:line-through;color:#aaa;"}>
               {todo.title}
             </span>
-            <.badge :if={todo.public} />
             <button
               phx-click="delete"
               phx-value-id={todo.id}
@@ -128,9 +128,6 @@ defmodule TodoClient.Live do
         <form phx-submit="add_todo" style="display:flex; gap:.4rem; margin-top:.4rem;">
           <input type="hidden" name="list_id" value={list.id} />
           <input name="title" placeholder="Add a todo…" required style="flex:1; padding:.3rem;" />
-          <label style="display:flex; align-items:center; gap:.2rem; font-size:.8rem;">
-            <input type="checkbox" name="public" value="true" /> public
-          </label>
           <button style="padding:.3rem .6rem;">Add</button>
         </form>
       </section>
