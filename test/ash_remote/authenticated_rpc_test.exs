@@ -37,8 +37,9 @@ defmodule AshRemote.AuthenticatedRpcTest do
     # Reading as Bob returns only Bob's.
     assert RemoteDocument |> Ash.read!(context: as(bob)) |> Enum.map(& &1.title) == ["Bob doc"]
 
-    # With no forwarded actor, the server's read policy denies access.
-    assert_raise Ash.Error.Forbidden, fn -> Ash.read!(RemoteDocument) end
+    # With no forwarded actor, the read policy filters everything out (neither
+    # owner-owned nor public) — no rows leak.
+    assert Ash.read!(RemoteDocument) == []
   end
 
   test "a token in the actor's metadata is auto-forwarded as a Bearer token" do

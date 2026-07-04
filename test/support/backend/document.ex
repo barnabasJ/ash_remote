@@ -17,18 +17,21 @@ defmodule AshRemote.Backend.Document do
     uuid_primary_key(:id)
     attribute(:title, :string, public?: true, allow_nil?: false)
     attribute(:owner_id, :uuid, public?: true)
+    attribute(:public, :boolean, public?: true, default: false, allow_nil?: false)
   end
 
   actions do
-    default_accept([:title, :owner_id])
+    default_accept([:title, :owner_id, :public])
     defaults([:read, :create, :update, :destroy])
   end
 
   policies do
-    # Only the owner may read a document — enforced on RPC reads AND on realtime
-    # subscription delivery.
+    # Readable by the owner OR if public — both branches reference only attributes
+    # carried on the wire, so realtime delivery resolves them in-memory (including
+    # a public record's destroy, whose row is gone).
     policy action_type(:read) do
       authorize_if(expr(owner_id == ^actor(:id)))
+      authorize_if(expr(public == true))
     end
 
     # Writes are unrestricted here (the test drives them server-side).

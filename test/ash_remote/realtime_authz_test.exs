@@ -48,4 +48,32 @@ defmodule AshRemote.RealtimeAuthzTest do
     Ash.update!(doc, %{title: "Secret v2"}, authorize?: false)
     refute_push("notification", %{"data" => %{"title" => "Secret v2"}})
   end
+
+  test "a public record's destroy is delivered (in-memory eval, no data-layer re-read)" do
+    other = Ash.UUID.generate()
+    bob = Ash.UUID.generate()
+
+    public_doc =
+      Ash.create!(Document, %{title: "Shared", owner_id: other, public: true}, authorize?: false)
+
+    private_doc =
+      Ash.create!(Document, %{title: "Private", owner_id: other}, authorize?: false)
+
+    # Bob doesn't own either, but the first is public.
+    {:ok, socket} = connect(AshRemote.Backend.RemoteSocket, %{"actor_id" => bob})
+    {:ok, _reply, _socket} = subscribe_and_join(socket, @topic, %{})
+
+    # Destroying the public doc reaches Bob — even though the row is now gone, the
+    # `public == true` branch resolves from the wire record with no query.
+    Ash.destroy!(public_doc, authorize?: false)
+
+    assert_push("notification", %{
+      "action" => %{"type" => "destroy"},
+      "data" => %{"title" => "Shared"}
+    })
+
+    # Destroying the private doc does not.
+    Ash.destroy!(private_doc, authorize?: false)
+    refute_push("notification", %{"data" => %{"title" => "Private"}})
+  end
 end

@@ -14,12 +14,19 @@ if Code.ensure_loaded?(Phoenix.Channel) do
       4. calls the host socket's `authorize_subscription/4` (default deny).
 
     Broadcasts are **intercepted per subscriber**: `handle_out/3` re-checks that
-    the subscriber's actor may read the specific record (`Ash.can?({record,
-    :read}, actor)`) and only then pushes the `"notification"` event. Join
-    authorizes the topic; this authorizes each record — so a broadcast never
-    reveals a row the actor could not have read. The actor is read from
-    `socket.assigns[:ash_remote_actor]` (set by the host socket's `connect/3` or
-    `authorize_subscription/4`). Resources with no authorizers skip the check.
+    the subscriber's actor may read the specific record before pushing the
+    `"notification"` event — so a subscription never reveals a row the actor
+    could not have read. The actor is read from `socket.assigns[:ash_remote_actor]`
+    (set by the host socket's `connect/3` or `authorize_subscription/4`).
+
+    Following `ash_graphql`'s subscription resolver, the actor's read-policy
+    **filter is computed once at join** (`Ash.can(query, actor, run_queries?:
+    false, alter_source?: true)`) and each notification's record is matched
+    against it **in-memory** (`Ash.Expr.eval/2`) — never a data-layer query per
+    notification per client. Only a record whose filter can't be resolved from
+    the wire attributes falls back to a single authorized re-read by primary key
+    (skipped for destroys, whose row is gone). Resources with no authorizers skip
+    the check entirely.
     """
     use Phoenix.Channel
 
@@ -35,7 +42,16 @@ if Code.ensure_loaded?(Phoenix.Channel) do
            {:ok, resource} <- resolve_resource(socket, source),
            :ok <- check_tenant(resource, tenant),
            {:ok, socket} <- authorize(socket, resource, tenant, params) do
-        {:ok, assign(socket, :ash_remote_resource, resource)}
+        socket =
+          socket
+          |> assign(:ash_remote_resource, resource)
+          |> assign(:ash_remote_tenant, tenant)
+          |> assign(
+            :ash_remote_read_scope,
+            read_scope(resource, socket.assigns[:ash_remote_actor], tenant)
+          )
+
+        {:ok, socket}
       else
         {:error, reason} -> {:error, %{reason: reason}}
       end
@@ -55,17 +71,25 @@ if Code.ensure_loaded?(Phoenix.Channel) do
       {:noreply, socket}
     end
 
-    defp visible?(payload, socket) do
-      resource = socket.assigns.ash_remote_resource
+    # `read_scope` was computed once at join from the actor's read policy.
+    defp visible?(_payload, %{assigns: %{ash_remote_read_scope: :all}}), do: true
+    defp visible?(_payload, %{assigns: %{ash_remote_read_scope: :none}}), do: false
 
-      # No authorizers → nothing to enforce (and no `Ash.can?` overhead).
-      if Ash.Resource.Info.authorizers(resource) == [] do
-        true
-      else
-        actor = socket.assigns[:ash_remote_actor]
-        record = reconstruct(resource, payload)
-        authorized_to_read?(record, actor)
+    defp visible?(payload, %{assigns: %{ash_remote_read_scope: {:filter, filter}}} = socket) do
+      resource = socket.assigns.ash_remote_resource
+      record = reconstruct(resource, payload)
+
+      case eval_filter(filter, record, resource) do
+        true -> true
+        false -> false
+        # The filter references data the wire record doesn't carry — resolve it
+        # with a single authorized re-read (skipped for destroys: the row is gone).
+        :unknown -> refetch_visible?(resource, record, socket, payload)
       end
+    rescue
+      error ->
+        Logger.warning("ash_remote: subscription authorization check failed: #{inspect(error)}")
+        false
     end
 
     defp reconstruct(resource, payload) do
@@ -73,13 +97,68 @@ if Code.ensure_loaded?(Phoenix.Channel) do
       Decoder.decode_record(payload["data"], resource, plan)
     end
 
-    # Deny (drop the notification) if the check errors — fail closed.
-    defp authorized_to_read?(record, actor) do
-      Ash.can?({record, :read}, actor)
+    # The actor's read filter, computed ONCE per subscription. `alter_source?`
+    # returns the query with the read policies applied (the actor is already
+    # substituted into the filter); `run_queries?: false` means no data layer is
+    # touched here.
+    defp read_scope(resource, actor, tenant) do
+      if Ash.Resource.Info.authorizers(resource) == [] do
+        :all
+      else
+        query =
+          resource
+          |> Ash.Query.set_tenant(tenant)
+          |> Ash.Query.for_read(read_action(resource))
+
+        case Ash.can(query, actor, tenant: tenant, run_queries?: false, alter_source?: true) do
+          {:ok, true, %{filter: nil}} -> :all
+          {:ok, true, %{filter: %Ash.Filter{expression: nil}}} -> :all
+          {:ok, true, %{filter: filter}} -> {:filter, filter}
+          {:ok, true} -> :all
+          _ -> :none
+        end
+      end
     rescue
       error ->
-        Logger.warning("ash_remote: subscription authorization check failed: #{inspect(error)}")
-        false
+        Logger.warning("ash_remote: could not compute subscription read scope: #{inspect(error)}")
+        :none
+    end
+
+    # Evaluate the (actor-substituted) filter against the in-memory record.
+    defp eval_filter(filter, record, resource) do
+      case Ash.Expr.eval(filter,
+             record: record,
+             resource: resource,
+             unknown_on_unknown_refs?: true
+           ) do
+        {:ok, true} -> true
+        {:ok, false} -> false
+        _ -> :unknown
+      end
+    end
+
+    defp refetch_visible?(_resource, _record, _socket, %{"action" => %{"type" => "destroy"}}),
+      do: false
+
+    defp refetch_visible?(resource, record, socket, _payload) do
+      pkey = Map.take(record, Ash.Resource.Info.primary_key(resource))
+
+      case Ash.get(resource, pkey,
+             actor: socket.assigns[:ash_remote_actor],
+             tenant: socket.assigns[:ash_remote_tenant],
+             authorize?: true,
+             not_found_error?: false
+           ) do
+        {:ok, nil} -> false
+        {:ok, _record} -> true
+        _ -> false
+      end
+    rescue
+      _ -> false
+    end
+
+    defp read_action(resource) do
+      Ash.Resource.Info.primary_action!(resource, :read).name
     end
 
     defp parse_topic(topic) do
