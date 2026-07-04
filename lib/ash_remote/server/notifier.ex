@@ -90,14 +90,21 @@ defmodule AshRemote.Server.Notifier do
     }
   end
 
-  # New values of the changeset's public attributes — populates the client's
-  # synthetic changeset `attributes`.
-  defp changed(%{changeset: %{attributes: attributes}}, resource) when is_map(attributes) do
+  # The public attributes touched by this change, with their FINAL values pulled
+  # from the result record (via the same serializer as `data`). We take the value
+  # from `notification.data`, never from `changeset.attributes`, because an atomic
+  # update stores Ash expressions there (from validations compiled to atomics),
+  # which are not JSON-encodable.
+  defp changed(%{changeset: changeset} = notification, resource) when not is_nil(changeset) do
     public = resource |> Ash.Resource.Info.public_attributes() |> MapSet.new(& &1.name)
 
-    attributes
-    |> Enum.filter(fn {name, _value} -> MapSet.member?(public, name) end)
-    |> Map.new(fn {name, value} -> {to_string(name), value} end)
+    names =
+      (Map.keys(changeset.attributes || %{}) ++ Keyword.keys(changeset.atomics || []))
+      |> Enum.uniq()
+      |> Enum.filter(&MapSet.member?(public, &1))
+      |> Enum.map(&to_string/1)
+
+    Fields.serialize(notification.data, resource, names)
   end
 
   defp changed(_notification, _resource), do: %{}

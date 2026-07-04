@@ -50,6 +50,20 @@ defmodule AshRemote.ServerNotifierTest do
       assert payload["changed"] == %{"title" => "Second"}
     end
 
+    test "an atomic update's payload is JSON-safe (no Ash expressions leak into changed)" do
+      # Post has a validation, so the update is atomic and changeset.attributes
+      # holds Ash expressions — changed must still carry the final plain value.
+      post = Ash.create!(Post, %{title: "Draft"})
+      assert_receive {:ash_remote_broadcast, _topic, "notification", _create}
+
+      Ash.update!(post, %{title: "Published"})
+
+      assert_receive {:ash_remote_broadcast, _topic, "notification", payload}
+      assert payload["changed"] == %{"title" => "Published"}
+      # The whole payload must be encodable — this is what the channel push does.
+      assert {:ok, _json} = Jason.encode(payload)
+    end
+
     test "a no_publish'd action broadcasts nothing (gate)" do
       post = Ash.create!(Post, %{title: "Doomed"})
       assert_receive {:ash_remote_broadcast, _topic, "notification", _create}

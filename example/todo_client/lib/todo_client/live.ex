@@ -37,10 +37,11 @@ defmodule TodoClient.Live do
 
   @impl true
   def handle_event("add_todo", %{"title" => title, "list_id" => list_id} = params, socket) do
+    # A todo in a public list is public too, so it's shared like the rest of the list.
+    public = params["public"] == "true" or list_public?(socket, list_id)
+
     Todo
-    |> Ash.Changeset.for_create(
-      :create,
-      %{title: title, list_id: list_id, public: params["public"] == "true"},
+    |> Ash.Changeset.for_create(:create, %{title: title, list_id: list_id, public: public},
       actor: actor()
     )
     |> Ash.create()
@@ -146,6 +147,13 @@ defmodule TodoClient.Live do
   end
 
   defp actor, do: TodoClient.Session.actor()
+
+  defp list_public?(socket, list_id) do
+    case Enum.find(socket.assigns.lists, &(&1.id == list_id)) do
+      %{public: public} -> public
+      _ -> false
+    end
+  end
 
   defp load_lists(socket) do
     lists =

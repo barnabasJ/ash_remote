@@ -15,14 +15,10 @@ defmodule TodoServer.TodoList do
   end
 
   policies do
-    # Own it OR it is public → visible + replicated to everyone.
-    policy action_type(:read) do
+    # Own it OR it's public → visible + editable by everyone (collaborative).
+    policy action_type([:read, :update, :destroy]) do
       authorize_if(relates_to_actor_via(:user))
       authorize_if(expr(public == true))
-    end
-
-    policy action_type([:update, :destroy]) do
-      authorize_if(relates_to_actor_via(:user))
     end
 
     policy action_type(:create) do

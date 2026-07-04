@@ -15,16 +15,12 @@ defmodule TodoServer.Todo do
   end
 
   policies do
-    # Readable if you own it OR it is public — so a public todo's realtime
-    # notification reaches every subscriber, a private one only its owner.
-    policy action_type(:read) do
+    # Own it OR it's public → visible AND editable by everyone (collaborative),
+    # so a public todo's changes reach — and can be made by — every user. A
+    # private todo is owner-only, on both RPC and realtime delivery.
+    policy action_type([:read, :update, :destroy]) do
       authorize_if(relates_to_actor_via(:user))
       authorize_if(expr(public == true))
-    end
-
-    # Only the owner may change a todo.
-    policy action_type([:update, :destroy]) do
-      authorize_if(relates_to_actor_via(:user))
     end
 
     policy action_type(:create) do

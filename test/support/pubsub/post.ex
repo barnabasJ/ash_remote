@@ -22,4 +22,10 @@ defmodule AshRemote.PubSubFixture.Post do
   actions do
     defaults([:read, :destroy, create: [:title, :published_on], update: [:title, :published_on]])
   end
+
+  validations do
+    # Forces the update into an atomic — so `changeset.attributes` holds Ash
+    # expressions, exercising the notifier's JSON-safe `changed` handling.
+    validate(string_length(:title, min: 1))
+  end
 end
