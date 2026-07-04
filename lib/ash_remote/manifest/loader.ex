@@ -87,9 +87,29 @@ defmodule AshRemote.Manifest.Loader do
       resources: resources,
       types: types,
       filter_capabilities: json["filter_capabilities"] || %{},
-      sort_capabilities: json["sort_capabilities"] || %{}
+      sort_capabilities: json["sort_capabilities"] || %{},
+      realtime: normalize_realtime(json["realtime"])
     }
   end
+
+  # Tolerant of old manifests with no `realtime` block.
+  defp normalize_realtime(nil), do: nil
+
+  defp normalize_realtime(%{"subscriptions" => subscriptions} = realtime) do
+    resources =
+      subscriptions
+      |> Enum.map(& &1["resource"])
+      |> Enum.reject(&is_nil/1)
+      |> MapSet.new()
+
+    %{
+      topic_prefix: realtime["topic_prefix"],
+      socket_path: realtime["socket_path"],
+      resources: resources
+    }
+  end
+
+  defp normalize_realtime(_), do: nil
 
   defp actions_by_resource(entrypoints) do
     entrypoints

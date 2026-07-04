@@ -14,17 +14,27 @@ defmodule AshRemote.Manifest do
           resources: %{String.t() => Resource.t()},
           types: %{String.t() => Type.t()},
           filter_capabilities: map(),
-          sort_capabilities: map()
+          sort_capabilities: map(),
+          realtime: map() | nil
         }
 
   defstruct schema_version: nil,
             resources: %{},
             types: %{},
             filter_capabilities: %{},
-            sort_capabilities: %{}
+            sort_capabilities: %{},
+            # nil when the backend advertises no realtime surface; otherwise
+            # %{topic_prefix:, socket_path:, resources: MapSet of module strings}.
+            realtime: nil
 
   @doc "Look up a resource by its backend module string."
   def resource(%__MODULE__{resources: resources}, module), do: Map.get(resources, module)
+
+  @doc "Whether the backend advertises realtime replication for a resource module string."
+  def realtime?(%__MODULE__{realtime: nil}, _module), do: false
+
+  def realtime?(%__MODULE__{realtime: %{resources: resources}}, module),
+    do: MapSet.member?(resources, module)
 end
 
 defmodule AshRemote.Manifest.Resource do

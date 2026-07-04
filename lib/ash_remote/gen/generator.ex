@@ -252,11 +252,16 @@ defmodule AshRemote.Gen do
     base =
       if ctx.base_url, do: "    base_url #{inspect(ctx.base_url)}\n", else: ""
 
+    realtime =
+      if AshRemote.Manifest.realtime?(ctx.manifest, res.module),
+        do: "    realtime? true\n",
+        else: ""
+
     """
       remote do
         source #{inspect(res.module)}
         schema_version #{inspect(ctx.manifest.schema_version)}
-    #{base}  end
+    #{base}#{realtime}  end
     """
     |> String.trim_trailing()
   end

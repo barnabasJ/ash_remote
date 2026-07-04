@@ -49,7 +49,49 @@ defmodule AshRemote.Server do
     {:ok, spec} =
       Ash.Info.Manifest.generate(otp_app: otp_app, action_entrypoints: entrypoints(otp_app))
 
-    spec |> manifest_map() |> Jason.encode!(pretty: true)
+    spec |> manifest_map() |> put_realtime(otp_app) |> Jason.encode!(pretty: true)
+  end
+
+  # Advertise only what the server can actually deliver: published mutation
+  # actions on resources that attach `AshRemote.Server.Notifier`.
+  defp put_realtime(map, otp_app) do
+    case realtime_subscriptions(otp_app) do
+      [] ->
+        map
+
+      subscriptions ->
+        Map.put(map, "realtime", %{
+          "topic_prefix" => AshRemote.Topics.prefix(),
+          "socket_path" => Application.get_env(:ash_remote, :socket_path, "/ash_remote/socket"),
+          "subscriptions" => subscriptions
+        })
+    end
+  end
+
+  defp realtime_subscriptions(otp_app) do
+    otp_app
+    |> publications()
+    |> Enum.filter(fn {resource, action} -> deliverable?(resource, action) end)
+    |> Enum.group_by(fn {resource, _} -> resource end, fn {_resource, action} -> action end)
+    |> Enum.map(fn {resource, actions} ->
+      %{
+        "resource" => inspect(resource),
+        "actions" => actions |> Enum.uniq() |> Enum.map(&to_string/1) |> Enum.sort()
+      }
+    end)
+    |> Enum.sort_by(& &1["resource"])
+  end
+
+  defp deliverable?(resource, action_name) do
+    AshRemote.Server.Notifier in Ash.Resource.Info.notifiers(resource) and
+      mutation_action?(resource, action_name)
+  end
+
+  defp mutation_action?(resource, action_name) do
+    case Ash.Resource.Info.action(resource, action_name) do
+      %{type: type} -> type in [:create, :update, :destroy]
+      _ -> false
+    end
   end
 
   # Ash's JsonSerializer (through at least 3.29.3) omits the action `name` from
