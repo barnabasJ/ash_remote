@@ -41,6 +41,21 @@ defmodule AshRemote.AuthenticatedRpcTest do
     assert_raise Ash.Error.Forbidden, fn -> Ash.read!(RemoteDocument) end
   end
 
+  test "a token in the actor's metadata is auto-forwarded as a Bearer token" do
+    alice = Ash.UUID.generate()
+    Ash.create!(Document, %{title: "Alice doc", owner_id: alice}, authorize?: false)
+    Ash.create!(Document, %{title: "Bob doc", owner_id: Ash.UUID.generate()}, authorize?: false)
+
+    # An actor carrying a token in metadata — exactly how ash_authentication
+    # returns a signed-in user. No manual header threading.
+    actor =
+      AshRemote.Backend.User
+      |> struct(id: Ash.UUID.generate())
+      |> Ash.Resource.put_metadata(:token, alice)
+
+    assert RemoteDocument |> Ash.read!(actor: actor) |> Enum.map(& &1.title) == ["Alice doc"]
+  end
+
   test "the forwarded actor authorizes RPC updates (get + policy)" do
     alice = Ash.UUID.generate()
     doc = Ash.create!(Document, %{title: "Owned", owner_id: alice}, authorize?: false)

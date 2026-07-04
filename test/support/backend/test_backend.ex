@@ -63,11 +63,26 @@ defmodule AshRemote.Backend.TestBackend do
     def call(conn, opts), do: conn |> put_actor() |> AshRemote.Backend.RpcRouter.call(opts)
 
     # Stand-in for a host auth plug (e.g. ash_authentication): turn a forwarded
-    # header into an actor via Ash.PlugHelpers, which AshRemote.Server.Router reads.
+    # header — an explicit test header OR a Bearer token — into an actor via
+    # Ash.PlugHelpers, which AshRemote.Server.Router reads.
     defp put_actor(conn) do
+      case actor_id(conn) do
+        nil -> conn
+        actor_id -> Ash.PlugHelpers.set_actor(conn, %{id: actor_id})
+      end
+    end
+
+    defp actor_id(conn) do
       case Plug.Conn.get_req_header(conn, "x-test-actor-id") do
-        [actor_id | _] -> Ash.PlugHelpers.set_actor(conn, %{id: actor_id})
-        [] -> conn
+        [actor_id | _] -> actor_id
+        [] -> bearer_token(conn)
+      end
+    end
+
+    defp bearer_token(conn) do
+      case Plug.Conn.get_req_header(conn, "authorization") do
+        ["Bearer " <> token | _] -> token
+        _ -> nil
       end
     end
   end

@@ -39,7 +39,17 @@ defmodule TodoServer.MixProject do
       {:ash, "~> 3.29"},
       # ash_remote provides the server-side RPC router + manifest (the shared core).
       {:ash_remote, path: "../.."},
+      # Igniter powers the ash_authentication installer/codegen.
+      {:igniter, "~> 0.6"},
+      # Authentication authority: users, password strategy, JWT tokens. Verified
+      # on both the RPC plug and the realtime socket connect.
+      {:ash_authentication, "~> 4.14"},
+      {:bcrypt_elixir, "~> 3.0"},
       {:simple_sat, "~> 0.1"},
+      # Phoenix hosts the realtime socket (and, via Bandit.PhoenixAdapter, the RPC
+      # routes) on a single port.
+      {:phoenix, "~> 1.7"},
+      {:phoenix_pubsub, "~> 2.1"},
       {:plug, "~> 1.16"},
       {:bandit, "~> 1.5"},
       {:jason, "~> 1.4"}

@@ -282,21 +282,47 @@ defmodule AshRemote.DataLayer do
     module.request(transport, path, body)
   end
 
-  # Per-request headers forwarded from the Ash action context, e.g. an auth token:
+  # Per-request headers forwarded to the backend so it can authenticate the call.
+  # Two sources, explicit winning on conflict:
   #
-  #     Ash.read!(RemoteTodo, actor: user,
-  #       context: %{ash_remote: %{headers: %{"authorization" => "Bearer " <> token}}})
+  #   * the actor's token metadata — `Ash.read!(RemoteTodo, actor: user)` where
+  #     `user` carries the JWT ash_authentication attaches on sign-in
+  #     (`Ash.Resource.get_metadata(user, :token)`) — forwarded as a Bearer token
+  #     with no boilerplate; and
+  #   * explicit headers in the action context, for full control:
+  #     `context: %{ash_remote: %{headers: %{"authorization" => ...}}}`.
   #
-  # The server's auth plug verifies them (ash_authentication) and sets the actor,
-  # so the RPC action authorizes as the calling user.
+  # The server's auth plug verifies them and sets the actor, so the RPC action
+  # authorizes as the calling user.
   defp request_headers(context) do
-    case get_in(context || %{}, [:ash_remote, :headers]) do
-      headers when is_map(headers) ->
-        Enum.map(headers, fn {key, value} -> {to_string(key), to_string(value)} end)
+    (actor_token_headers(context) ++ explicit_headers(context))
+    |> Map.new(fn {key, value} -> {String.downcase(to_string(key)), to_string(value)} end)
+    |> Map.to_list()
+  end
 
-      _ ->
-        []
+  defp explicit_headers(context) do
+    case get_in(context || %{}, [:ash_remote, :headers]) do
+      headers when is_map(headers) -> Map.to_list(headers)
+      _ -> []
     end
+  end
+
+  defp actor_token_headers(context) do
+    key = Application.get_env(:ash_remote, :actor_token_metadata_key, :token)
+
+    with true <- not is_nil(key),
+         actor when is_struct(actor) <- get_in(context || %{}, [:private, :actor]),
+         token when is_binary(token) <- actor_token(actor, key) do
+      [{"authorization", "Bearer " <> token}]
+    else
+      _ -> []
+    end
+  end
+
+  defp actor_token(actor, key) do
+    Ash.Resource.get_metadata(actor, key)
+  rescue
+    _ -> nil
   end
 
   @doc """
