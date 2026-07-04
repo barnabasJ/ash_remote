@@ -225,11 +225,18 @@ defmodule AshRemote.Server do
     end)
   end
 
-  @doc "Run an action against the exposed resources. Returns the response envelope."
-  def run_action(otp_app, params) do
+  @doc """
+  Run an action against the exposed resources. Returns the response envelope.
+
+  `opts` may carry `:client_id` — the realtime client-correlation id from the
+  `x-ash-remote-client-id` request header — which is stamped into the mutation
+  changeset's context so `AshRemote.Server.Notifier` can echo it back as
+  `origin.client_id`.
+  """
+  def run_action(otp_app, params, opts \\ []) do
     with {:ok, resource} <- resolve_resource(otp_app, params["resource"]),
          {:ok, action} <- resolve_action(otp_app, resource, params["action"]) do
-      %{"success" => true, "data" => dispatch(resource, action, params)}
+      %{"success" => true, "data" => dispatch(resource, action, params, opts)}
     end
     |> normalize()
   rescue
@@ -260,7 +267,7 @@ defmodule AshRemote.Server do
 
   # --- dispatch ------------------------------------------------------------
 
-  defp dispatch(resource, %{type: :read} = action, params) do
+  defp dispatch(resource, %{type: :read} = action, params, _opts) do
     fields = params["fields"] || []
     {select, load} = Fields.to_select_and_load(resource, fields)
     input = Map.merge(params["input"] || %{}, params["primary_key"] || %{})
@@ -291,34 +298,46 @@ defmodule AshRemote.Server do
     end
   end
 
-  defp dispatch(resource, %{type: :create} = action, params) do
+  defp dispatch(resource, %{type: :create} = action, params, opts) do
     fields = params["fields"] || []
     {_select, load} = Fields.to_select_and_load(resource, fields)
 
     resource
     |> Ash.Changeset.for_create(action.name, params["input"] || %{})
+    |> put_origin_context(opts)
     |> Ash.create!(load: load)
     |> then(&Fields.serialize(&1, resource, fields))
   end
 
-  defp dispatch(resource, %{type: :update} = action, params) do
+  defp dispatch(resource, %{type: :update} = action, params, opts) do
     fields = params["fields"] || []
     {_select, load} = Fields.to_select_and_load(resource, fields)
 
     resource
     |> fetch!(params["primary_key"])
     |> Ash.Changeset.for_update(action.name, params["input"] || %{})
+    |> put_origin_context(opts)
     |> Ash.update!(load: load)
     |> then(&Fields.serialize(&1, resource, fields))
   end
 
-  defp dispatch(resource, %{type: :destroy} = action, params) do
+  defp dispatch(resource, %{type: :destroy} = action, params, opts) do
     resource
     |> fetch!(params["primary_key"])
     |> Ash.Changeset.for_destroy(action.name, params["input"] || %{})
+    |> put_origin_context(opts)
     |> Ash.destroy!()
 
     %{}
+  end
+
+  # Stamp the realtime client-correlation id into the changeset context so
+  # AshRemote.Server.Notifier can echo it back as origin.client_id.
+  defp put_origin_context(changeset, opts) do
+    case Keyword.get(opts, :client_id) do
+      nil -> changeset
+      client_id -> Ash.Changeset.set_context(changeset, %{ash_remote: %{client_id: client_id}})
+    end
   end
 
   # --- helpers -------------------------------------------------------------

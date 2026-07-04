@@ -9,6 +9,8 @@ defmodule AshRemote.Backend.Domain do
   end
 
   rpc do
+    pub_sub(AshRemote.Backend.Endpoint)
+
     resource AshRemote.Backend.Todo do
       expose(:read)
       expose(:create)

@@ -2,7 +2,8 @@ defmodule AshRemote.Backend.Comment do
   @moduledoc false
   use Ash.Resource,
     domain: AshRemote.Backend.Domain,
-    data_layer: Ash.DataLayer.Ets
+    data_layer: Ash.DataLayer.Ets,
+    notifiers: [AshRemote.Server.Notifier]
 
   ets do
     private?(false)

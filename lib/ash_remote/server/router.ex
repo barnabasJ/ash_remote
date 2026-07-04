@@ -36,9 +36,16 @@ defmodule AshRemote.Server.Router do
       plug(:dispatch)
 
       post "/rpc/run" do
+        client_id =
+          var!(conn)
+          |> Plug.Conn.get_req_header("x-ash-remote-client-id")
+          |> List.first()
+
         ash_remote_send_json(
           var!(conn),
-          AshRemote.Server.run_action(@ash_remote_otp_app, var!(conn).params)
+          AshRemote.Server.run_action(@ash_remote_otp_app, var!(conn).params,
+            client_id: client_id
+          )
         )
       end
 

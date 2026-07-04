@@ -32,7 +32,7 @@ defmodule AshRemote.Transport.Req do
         method: :post,
         url: Config.url(config, path),
         json: body,
-        headers: config.headers,
+        headers: headers(config),
         receive_timeout: config.receive_timeout,
         retry: config.retry,
         decode_json: [keys: :strings]
@@ -50,6 +50,16 @@ defmodule AshRemote.Transport.Req do
 
       {:error, reason} ->
         {:error, {:transport_error, reason}}
+    end
+  end
+
+  # Attach the realtime client-correlation header when a client id is registered
+  # for this base_url, so server-side notifications can mark the origin and the
+  # subscriber can suppress the echo of its own write.
+  defp headers(%Config{base_url: base_url, headers: headers}) do
+    case AshRemote.Realtime.ClientId.get(base_url) do
+      nil -> headers
+      client_id -> [{"x-ash-remote-client-id", client_id} | headers]
     end
   end
 
