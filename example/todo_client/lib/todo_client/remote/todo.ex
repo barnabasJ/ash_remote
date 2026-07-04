@@ -2,11 +2,13 @@ defmodule TodoClient.Remote.Todo do
   use Ash.Resource,
     domain: TodoClient.Remote.Domain,
     data_layer: AshRemote.DataLayer,
-    extensions: [AshRemote.Resource]
+    extensions: [AshRemote.Resource],
+    notifiers: [TodoClient.RealtimeBridge]
 
   remote do
     source("TodoServer.Todo")
     schema_version("1.0.0")
+    realtime?(true)
   end
 
   attributes do
@@ -15,6 +17,7 @@ defmodule TodoClient.Remote.Todo do
     uuid_primary_key(:id)
     attribute(:inserted_at, :utc_datetime_usec, public?: true)
     attribute(:priority, TodoClient.Remote.Priority, public?: true)
+    attribute(:public, :boolean, public?: true)
     attribute(:title, :string, public?: true, allow_nil?: false)
   end
 
@@ -45,7 +48,9 @@ defmodule TodoClient.Remote.Todo do
   end
 
   calculations do
-    calculate :overdue?, :boolean, expr(not is_nil(id)) do
+    calculate :overdue?,
+              :boolean,
+              expr(not is_nil(due_date) and due_date < today() and not completed) do
       public?(true)
     end
   end
@@ -53,7 +58,7 @@ defmodule TodoClient.Remote.Todo do
   actions do
     create :create do
       primary?(true)
-      accept([:title, :completed, :priority, :due_date, :list_id, :parent_id])
+      accept([:title, :completed, :public, :priority, :due_date, :list_id, :parent_id])
     end
 
     destroy :destroy do
@@ -63,12 +68,13 @@ defmodule TodoClient.Remote.Todo do
 
     read :read do
       primary?(true)
+      prepare(AshRemote.PrefetchCalculations)
     end
 
     update :update do
       primary?(true)
       require_atomic?(false)
-      accept([:title, :completed, :priority, :due_date, :list_id, :parent_id])
+      accept([:title, :completed, :public, :priority, :due_date, :list_id, :parent_id])
     end
   end
 end

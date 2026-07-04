@@ -2,16 +2,20 @@ defmodule TodoClient.Remote.TodoList do
   use Ash.Resource,
     domain: TodoClient.Remote.Domain,
     data_layer: AshRemote.DataLayer,
-    extensions: [AshRemote.Resource]
+    extensions: [AshRemote.Resource],
+    notifiers: [TodoClient.RealtimeBridge]
 
   remote do
     source("TodoServer.TodoList")
     schema_version("1.0.0")
+    realtime?(true)
   end
 
   attributes do
     uuid_primary_key(:id)
+    attribute(:inserted_at, :utc_datetime_usec, public?: true)
     attribute(:name, :string, public?: true, allow_nil?: false)
+    attribute(:public, :boolean, public?: true)
   end
 
   relationships do
@@ -20,21 +24,10 @@ defmodule TodoClient.Remote.TodoList do
       source_attribute: :id,
       destination_attribute: :list_id
     )
-
-    belongs_to(:user, TodoClient.Remote.User,
-      public?: true,
-      attribute_writable?: true,
-      source_attribute: :user_id,
-      destination_attribute: :id
-    )
   end
 
-  calculations do
-    calculate :completed_count, :integer, expr(not is_nil(id)) do
-      public?(true)
-    end
-
-    calculate :todo_count, :integer, expr(not is_nil(id)) do
+  aggregates do
+    count :todo_count, :todos do
       public?(true)
     end
   end
@@ -42,11 +35,23 @@ defmodule TodoClient.Remote.TodoList do
   actions do
     create :create do
       primary?(true)
-      accept([:name, :user_id])
+      accept([:name, :public])
+    end
+
+    destroy :destroy do
+      primary?(true)
+      require_atomic?(false)
     end
 
     read :read do
       primary?(true)
+      prepare(AshRemote.PrefetchCalculations)
+    end
+
+    update :update do
+      primary?(true)
+      require_atomic?(false)
+      accept([:name, :public])
     end
   end
 end

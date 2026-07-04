@@ -15,7 +15,13 @@ defmodule TodoServer.TodoList do
   end
 
   policies do
-    policy action_type([:read, :update, :destroy]) do
+    # Own it OR it is public → visible + replicated to everyone.
+    policy action_type(:read) do
+      authorize_if(relates_to_actor_via(:user))
+      authorize_if(expr(public == true))
+    end
+
+    policy action_type([:update, :destroy]) do
       authorize_if(relates_to_actor_via(:user))
     end
 
@@ -27,6 +33,8 @@ defmodule TodoServer.TodoList do
   attributes do
     uuid_primary_key(:id)
     attribute(:name, :string, public?: true, allow_nil?: false)
+    # Public lists are visible to (and replicated to) every user.
+    attribute(:public, :boolean, public?: true, default: false, allow_nil?: false)
     create_timestamp(:inserted_at, public?: true)
   end
 
@@ -36,11 +44,11 @@ defmodule TodoServer.TodoList do
       allow_nil?(false)
     end
 
-    has_many(:todos, TodoServer.Todo, public?: true)
+    has_many(:todos, TodoServer.Todo, public?: true, destination_attribute: :list_id)
   end
 
   actions do
-    default_accept([:name])
+    default_accept([:name, :public])
 
     read(:read, primary?: true)
 

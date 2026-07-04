@@ -15,8 +15,15 @@ defmodule TodoServer.Todo do
   end
 
   policies do
-    # A user may only see and change their own todos.
-    policy action_type([:read, :update, :destroy]) do
+    # Readable if you own it OR it is public — so a public todo's realtime
+    # notification reaches every subscriber, a private one only its owner.
+    policy action_type(:read) do
+      authorize_if(relates_to_actor_via(:user))
+      authorize_if(expr(public == true))
+    end
+
+    # Only the owner may change a todo.
+    policy action_type([:update, :destroy]) do
       authorize_if(relates_to_actor_via(:user))
     end
 
@@ -29,6 +36,9 @@ defmodule TodoServer.Todo do
     uuid_primary_key(:id)
     attribute(:title, :string, public?: true, allow_nil?: false)
     attribute(:completed, :boolean, public?: true, default: false, allow_nil?: false)
+    # Public todos are visible to (and replicated to) every user; private ones
+    # only to their owner.
+    attribute(:public, :boolean, public?: true, default: false, allow_nil?: false)
     attribute(:priority, TodoServer.Priority, public?: true, default: :medium)
     attribute(:due_date, :date, public?: true)
     create_timestamp(:inserted_at, public?: true)
@@ -58,7 +68,7 @@ defmodule TodoServer.Todo do
   end
 
   actions do
-    default_accept([:title, :completed, :priority, :due_date, :list_id, :parent_id])
+    default_accept([:title, :completed, :public, :priority, :due_date, :list_id, :parent_id])
 
     read :read do
       primary?(true)

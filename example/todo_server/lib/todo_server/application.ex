@@ -34,13 +34,16 @@ defmodule TodoServer.Application do
       ada = register("ada@example.com")
       grace = register("grace@example.com")
 
-      errands = create_list(ada, "Errands")
-      launch = create_list(grace, "Launch")
+      errands = create_list(ada, "Errands", false)
+      launch = create_list(grace, "Launch", false)
+      announcements = create_list(ada, "Announcements", true)
 
-      create_todo(ada, "Buy milk", :low, errands)
-      create_todo(ada, "Renew passport", :medium, errands)
-      create_todo(grace, "Ship ash_remote", :high, launch)
-      create_todo(grace, "Write the changelog", :high, launch)
+      create_todo(ada, "Buy milk", :low, errands, false)
+      create_todo(ada, "Renew passport", :medium, errands, false)
+      create_todo(grace, "Ship ash_remote", :high, launch, false)
+      create_todo(grace, "Write the changelog", :high, launch, false)
+      # A shared/public todo — every signed-in user sees it and its live updates.
+      create_todo(ada, "Company all-hands Friday", :medium, announcements, true)
     end
   rescue
     error -> Logger.warning("seed skipped: #{inspect(error)}")
@@ -56,15 +59,17 @@ defmodule TodoServer.Application do
     |> Ash.create!(authorize?: false)
   end
 
-  defp create_list(user, name) do
+  defp create_list(user, name, public) do
     TodoServer.TodoList
-    |> Ash.Changeset.for_create(:create, %{name: name}, actor: user)
+    |> Ash.Changeset.for_create(:create, %{name: name, public: public}, actor: user)
     |> Ash.create!(actor: user)
   end
 
-  defp create_todo(user, title, priority, list) do
+  defp create_todo(user, title, priority, list, public) do
     TodoServer.Todo
-    |> Ash.Changeset.for_create(:create, %{title: title, priority: priority, list_id: list.id},
+    |> Ash.Changeset.for_create(
+      :create,
+      %{title: title, priority: priority, list_id: list.id, public: public},
       actor: user
     )
     |> Ash.create!(actor: user)

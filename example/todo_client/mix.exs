@@ -36,6 +36,8 @@ defmodule TodoClient.MixProject do
       {:simple_sat, "~> 0.1"},
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},
+      # The realtime client transport (server→client push).
+      {:slipstream, "~> 1.1"},
 
       # A small, viewable LiveView UI over the generated resources.
       {:phoenix, "~> 1.8"},

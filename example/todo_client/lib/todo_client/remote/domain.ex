@@ -4,6 +4,5 @@ defmodule TodoClient.Remote.Domain do
   resources do
     resource(TodoClient.Remote.Todo)
     resource(TodoClient.Remote.TodoList)
-    resource(TodoClient.Remote.User)
   end
 end
