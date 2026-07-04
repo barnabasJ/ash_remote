@@ -18,7 +18,7 @@ defmodule AshRemote.DataLayer do
   """
   @behaviour Ash.DataLayer
 
-  alias AshRemote.{Protocol, Query, Transport}
+  alias AshRemote.{Decoder, Protocol, Query, Transport}
   alias AshRemote.Encode.{Fields, Filter, Pagination, Sort}
   alias AshRemote.Transport.Config
 
@@ -94,7 +94,7 @@ defmodule AshRemote.DataLayer do
 
   @impl true
   def run_query(%Query{resource: resource} = query, _resource) do
-    cfg = config(resource)
+    cfg = remote_config(resource)
     {fields, plan} = query |> Fields.build() |> add_prefetch_calculations(query)
 
     body =
@@ -109,7 +109,7 @@ defmodule AshRemote.DataLayer do
 
     with {:ok, response} <- request(cfg, :run, body),
          {:ok, data} <- Protocol.parse_run(response) do
-      {:ok, decode_records(data, resource, plan)}
+      {:ok, Decoder.decode_records(data, resource, plan)}
     else
       {:error, errors} when is_list(errors) -> {:error, AshRemote.Error.to_ash_error(errors)}
       {:error, other} -> {:error, other}
@@ -130,7 +130,7 @@ defmodule AshRemote.DataLayer do
 
   @impl true
   def destroy(resource, changeset) do
-    cfg = config(resource)
+    cfg = remote_config(resource)
 
     body =
       Protocol.build_run(%{
@@ -149,8 +149,8 @@ defmodule AshRemote.DataLayer do
   end
 
   defp write(resource, _changeset, action_name, input, primary_key) do
-    cfg = config(resource)
-    {fields, plan} = write_fields(resource)
+    cfg = remote_config(resource)
+    {fields, plan} = Decoder.write_fields(resource)
 
     body =
       Protocol.build_run(
@@ -165,7 +165,7 @@ defmodule AshRemote.DataLayer do
 
     with {:ok, response} <- request(cfg, :run, body),
          {:ok, data} <- Protocol.parse_run(response) do
-      {:ok, decode_record(data, resource, plan)}
+      {:ok, Decoder.decode_record(data, resource, plan)}
     else
       {:error, errors} when is_list(errors) -> {:error, AshRemote.Error.to_ash_error(errors)}
       {:error, other} -> {:error, other}
@@ -202,7 +202,7 @@ defmodule AshRemote.DataLayer do
   is fetched at once so sibling calculations share the round-trip.
   """
   def fetch_remote_calculations(resource, pk_values, specs) do
-    cfg = config(resource)
+    cfg = remote_config(resource)
     [pk] = Ash.Resource.Info.primary_key(resource)
     pk_key = to_string(pk)
     filter = Ash.Filter.parse!(resource, [{pk, [in: pk_values]}])
@@ -229,25 +229,12 @@ defmodule AshRemote.DataLayer do
 
          {name,
           Map.new(rows, fn row ->
-            {to_string(row[pk_key]), cast_calculation(resource, name, row[key])}
+            {to_string(row[pk_key]), Decoder.cast_calculation(resource, name, row[key])}
           end)}
        end)}
     else
       {:error, errors} when is_list(errors) -> {:error, AshRemote.Error.to_ash_error(errors)}
       {:error, other} -> {:error, other}
-    end
-  end
-
-  defp cast_calculation(resource, name, value) do
-    case Ash.Resource.Info.calculation(resource, name) do
-      %{type: type, constraints: constraints} ->
-        case Ash.Type.cast_input(type, value, constraints) do
-          {:ok, cast} -> cast
-          _ -> value
-        end
-
-      _ ->
-        value
     end
   end
 
@@ -275,12 +262,6 @@ defmodule AshRemote.DataLayer do
     |> Map.new(fn key -> {to_string(key), Map.get(record, key)} end)
   end
 
-  defp write_fields(resource) do
-    names = resource |> Ash.Resource.Info.public_attributes() |> Enum.map(& &1.name)
-    names = Enum.uniq(Ash.Resource.Info.primary_key(resource) ++ names)
-    {Enum.map(names, &to_string/1), Enum.map(names, &{to_string(&1), {:attribute, &1}})}
-  end
-
   defp read_action_name(resource, cfg) do
     case Ash.Resource.Info.primary_action(resource, :read) do
       %{name: name} -> map_action(name, cfg)
@@ -292,73 +273,6 @@ defmodule AshRemote.DataLayer do
     cfg |> Map.get(:action_map, %{}) |> Map.get(name, name) |> to_string()
   end
 
-  # --- decode --------------------------------------------------------------
-
-  defp decode_records(%{"results" => results}, resource, plan) do
-    Enum.map(results, &decode_record(&1, resource, plan))
-  end
-
-  defp decode_records(records, resource, plan) when is_list(records) do
-    Enum.map(records, &decode_record(&1, resource, plan))
-  end
-
-  defp decode_record(nil, _resource, _plan), do: nil
-
-  defp decode_record(map, resource, plan) when is_map(map) do
-    record = struct(resource)
-
-    record =
-      Enum.reduce(plan, record, fn {wire_key, target}, acc ->
-        value = Map.get(map, wire_key)
-        place(acc, target, value, resource)
-      end)
-
-    %{record | __meta__: %Ecto.Schema.Metadata{state: :loaded, schema: resource}}
-  end
-
-  defp place(record, {:attribute, name}, value, resource) do
-    Map.put(record, name, cast_attribute(resource, name, value))
-  end
-
-  defp place(record, {:remote_calc_meta, name}, value, resource) do
-    Ash.Resource.put_metadata(
-      record,
-      {:ash_remote_calc, name},
-      cast_calculation(resource, name, value)
-    )
-  end
-
-  defp place(record, {:calculation, %{load: load} = calc}, value, _resource)
-       when not is_nil(load) do
-    Map.put(record, calc.load, value)
-  end
-
-  defp place(record, {:calculation, calc}, value, _resource) do
-    Map.update!(record, :calculations, &Map.put(&1, calc.name, value))
-  end
-
-  defp place(record, {:aggregate, %{load: load} = _agg}, value, _resource)
-       when not is_nil(load) do
-    Map.put(record, load, value)
-  end
-
-  defp place(record, {:aggregate, agg}, value, _resource) do
-    Map.update!(record, :aggregates, &Map.put(&1, agg.name, value))
-  end
-
-  defp cast_attribute(resource, name, value) do
-    case Ash.Resource.Info.attribute(resource, name) do
-      nil ->
-        value
-
-      attr ->
-        case Ash.Type.cast_input(attr.type, value, attr.constraints) do
-          {:ok, casted} -> casted
-          _ -> value
-        end
-    end
-  end
-
   # --- transport / config --------------------------------------------------
 
   defp request(cfg, path, body) do
@@ -367,9 +281,14 @@ defmodule AshRemote.DataLayer do
     module.request(transport, path, body)
   end
 
-  # Prefer the `AshRemote.Resource` extension (generated resources); fall back to
-  # application env keyed by resource (for resources without the extension).
-  defp config(resource) do
+  @doc """
+  Resolve the remote wire config for a resource: `%{source, base_url, action_map,
+  applicable}`. Prefers the `AshRemote.Resource` extension (generated resources);
+  falls back to application env keyed by resource (for resources without the
+  extension). Public so the realtime subscriber can resolve source/base_url/
+  action_map for `realtime?` resources.
+  """
+  def remote_config(resource) do
     if AshRemote.Resource.Info.remote?(resource) do
       %{
         source: AshRemote.Resource.Info.remote_source!(resource),
