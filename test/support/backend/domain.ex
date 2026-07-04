@@ -26,6 +26,8 @@ defmodule AshRemote.Backend.Domain do
     resource AshRemote.Backend.Comment do
       expose(:read)
       expose(:create)
+      # gate: create is exposed over RPC but opted OUT of realtime publication
+      no_publish(:create)
     end
   end
 end

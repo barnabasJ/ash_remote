@@ -1,19 +1,27 @@
-defmodule AshRemote.RealtimeClient.Todo do
+defmodule AshRemote.RealtimeClient.PubSubTodo do
   @moduledoc """
-  A realtime-enabled client mirror of `AshRemote.Backend.Todo` (via
-  `AshRemote.DataLayer`), with a capture notifier so tests can observe the
-  notifications replicated from the server. `base_url` falls back to
-  `config :ash_remote, :base_url` (the HTTP RPC endpoint).
+  A realtime client mirror wired with `Ash.Notifier.PubSub` publishing to a
+  `:_pkey` topic — the regression guard for the reconstructed synthetic
+  changeset (PubSub dereferences `notification.changeset.resource` to fill
+  `:_pkey`, so a `nil` changeset would crash).
   """
   use Ash.Resource,
     domain: AshRemote.RealtimeClient.Domain,
     data_layer: AshRemote.DataLayer,
     extensions: [AshRemote.Resource],
-    notifiers: [AshRemote.RealtimeClient.CaptureNotifier]
+    notifiers: [Ash.Notifier.PubSub]
 
   remote do
     source("AshRemote.Backend.Todo")
     realtime?(true)
+  end
+
+  pub_sub do
+    module(AshRemote.Backend.Endpoint)
+    prefix("pubsub_todo")
+
+    publish_all(:create, ["created", :_pkey])
+    publish_all(:update, ["updated", :_pkey])
   end
 
   attributes do

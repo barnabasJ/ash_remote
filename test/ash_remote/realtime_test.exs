@@ -73,4 +73,17 @@ defmodule AshRemote.RealtimeTest do
     assert notification.data.title == "Final"
     assert notification.changeset.attributes[:title] == "Final"
   end
+
+  test "a server-side destroy is replicated with the pre-destroy record" do
+    todo = Ash.create!(AshRemote.Backend.Todo, %{title: "Delete me", status: :pending})
+    assert_receive {:notification, %{action: %{type: :create}}}, 2_000
+
+    Ash.destroy!(todo)
+
+    assert_receive {:notification, notification}, 2_000
+    assert notification.action.type == :destroy
+    # data is the pre-destroy record — id and attributes are still present
+    assert notification.data.id == todo.id
+    assert notification.data.title == "Delete me"
+  end
 end

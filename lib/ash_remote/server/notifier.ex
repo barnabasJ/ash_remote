@@ -23,6 +23,8 @@ defmodule AshRemote.Server.Notifier do
   """
   use Ash.Notifier
 
+  require Logger
+
   alias AshRemote.{Decoder, Topics}
   alias AshRemote.Rpc.Info
   alias AshRemote.Server.Fields
@@ -56,7 +58,16 @@ defmodule AshRemote.Server.Notifier do
     tenant = notification.changeset && notification.changeset.to_tenant
     source = inspect(resource)
     topic = Topics.topic(source, tenant)
-    pub_sub.broadcast(topic, "notification", payload(notification, resource, source, tenant))
+
+    # Notifications are best-effort hints; a transport failure must never fail
+    # the originating write.
+    try do
+      pub_sub.broadcast(topic, "notification", payload(notification, resource, source, tenant))
+    rescue
+      error ->
+        Logger.warning("ash_remote: realtime broadcast to #{topic} failed: #{inspect(error)}")
+    end
+
     :ok
   end
 
