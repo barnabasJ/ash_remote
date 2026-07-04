@@ -26,10 +26,25 @@ config :todo_client, TodoClient.Endpoint,
 
 config :phoenix, :json_library, Jason
 
-# The in-BEAM end-to-end test runs the backend's RPC router in-process; a
-# dependency's own config isn't loaded, so register its domains here for tests.
+# The in-BEAM end-to-end test runs the backend (auth + RPC) in-process; a
+# dependency's own config isn't loaded, so register its domains + token secret here.
 if config_env() == :test do
-  config :todo_server, ash_domains: [TodoServer.Domain]
+  config :todo_server,
+    ash_domains: [TodoServer.Accounts, TodoServer.Domain],
+    token_signing_secret: "todo_client_e2e_token_signing_secret_change_me"
+
+  # The e2e harness starts the backend + session manually (test/test_helper.exs);
+  # don't auto-start the client's realtime tree (it would connect before the
+  # in-process server exists).
+  config :todo_client, start_children: false
+
+  # The backend endpoint (no HTTP port) so the notifier's broadcasts have a
+  # pubsub to land on instead of warning.
+  config :todo_server, TodoServer.Endpoint,
+    adapter: Bandit.PhoenixAdapter,
+    secret_key_base: String.duplicate("todo_server_test_secret_key_base_", 2),
+    pubsub_server: TodoServer.PubSub,
+    server: false
 end
 
 config :ash, :validate_domain_config_inclusion?, false

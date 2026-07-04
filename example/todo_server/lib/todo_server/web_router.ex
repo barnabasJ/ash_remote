@@ -6,6 +6,8 @@ defmodule TodoServer.WebRouter do
   """
   use Plug.Router
 
+  # Parse JSON when mounted standalone (idempotent — the endpoint also parses).
+  plug(Plug.Parsers, parsers: [:json], pass: ["application/json"], json_decoder: Jason)
   plug(:match)
   plug(TodoServer.AuthPlug)
   plug(:dispatch)

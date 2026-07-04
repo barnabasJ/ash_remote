@@ -1,106 +1,83 @@
-# ash_remote example — todo server + LiveView client
+# ash_remote example — authenticated realtime todos
 
-A two-project monorepo showing `ash_remote` end to end:
+A two-project monorepo showing `ash_remote` end to end: **authenticated RPC over
+HTTP**, **realtime replication over a websocket**, and **per-record
+authorization** — all wired to `ash_authentication`.
 
 ```
 example/
-  todo_server/   Ash backend. Declares its RPC-exposed surface with the
-                 `AshRemote.Rpc` DSL, mounts `AshRemote.Server.Router`, and
-                 publishes a JSON Ash.Info.Manifest at /manifest.json.
+  todo_server/   The auth authority AND resource/realtime server, on one Phoenix
+                 endpoint. ash_authentication issues JWTs; Todo/TodoList are
+                 owned by the signed-in user (owner-only, or public); the domain
+                 exposes them over RPC and publishes changes with AshRemote.Server.Notifier.
   todo_client/   A LiveView app. Consumes the manifest, generates standalone Ash
-                 resources with `mix ash_remote.gen`, and manages todos from a
-                 LiveView using AshPhoenix.Form — every read/write is an RPC call
-                 to todo_server via AshRemote.DataLayer.
+                 resources with `mix ash_remote.gen`, signs in for a JWT, and shows
+                 the user's todos live — reads/writes over authenticated RPC,
+                 updates over the realtime socket.
 ```
 
 ## The flow
 
 ```
-todo_server ──/manifest.json──►  mix ash_remote.gen  ──►  TodoClient.Remote.{TodoList,Todo,User,Priority}
-     ▲                                                              │
-     └──────── /rpc/run ◄──── AshRemote.DataLayer ◄──── TodoClient.Live (AshPhoenix.Form)
+                     /auth/sign-in ──► JWT
+todo_server ──/manifest.json──►  mix ash_remote.gen  ──►  TodoClient.Remote.{Todo,TodoList}
+     ▲   ▲                                                         │        │
+     │   └── ws /ash_remote/socket ◄── AshRemote.Realtime ◄────────┘        │
+     └────────── /rpc/run (Bearer JWT) ◄── AshRemote.DataLayer ◄── TodoClient.Live
 ```
 
-The LiveView calls `Ash.read!/1`, `AshPhoenix.Form.submit/2`, `Ash.update!/2`,
-`Ash.destroy!/1` on the **generated** resources exactly as if they were local —
-`AshRemote.DataLayer` turns each into an HTTP RPC call to `todo_server`.
+Every RPC carries the user's JWT (auto-forwarded from the actor); the realtime
+socket authenticates with the same JWT. The server runs each action as that
+user, so both reads and pushed notifications are scoped by the resource's
+policies.
 
-## What the domain showcases
+## What it demonstrates
 
-One `Ash.Query.load` in the LiveView exercises the full loading surface:
+- **Authentication (ash_authentication).** `todo_server` owns users (email +
+  password, JWT tokens). `TodoServer.AuthPlug` turns a Bearer token into an
+  actor for RPC; `TodoServer.RemoteSocket` does the same from a connect param
+  for realtime — RPC and subscriptions authenticate identically.
+- **Owner filtering.** `Todo`/`TodoList` have an owner-only read policy, so a
+  user only sees their own private items — enforced on RPC **and** on realtime
+  delivery (the channel re-checks `Ash.can?({record, :read}, actor)` before
+  pushing).
+- **Public sharing.** A `public` flag flips the policy to "own it OR it's
+  public", so public todos are visible to everyone and their changes broadcast
+  to all clients.
+- **Realtime.** `AshRemote.Realtime` re-emits each server-side change locally; a
+  `RealtimeBridge` notifier forwards it to the LiveView, which refetches. You
+  only receive changes you're allowed to see.
+- **Token ergonomics.** The client passes a `CurrentUser` actor carrying the JWT
+  in metadata; `AshRemote.DataLayer` auto-forwards it as a Bearer header —
+  including on Ash's relationship-load follow-up reads.
 
-```elixir
-TodoList
-|> Ash.Query.load([:todo_count, :completed_count, :user,
-                   todos: [:overdue?, subtasks: [:overdue?]]])
-|> Ash.read!()
-```
-
-- **Relationships** — `TodoList belongs_to :user` / `has_many :todos`, and the
-  self-referential `Todo has_many :subtasks` (FK `parent_id`). Loaded via Ash's
-  batched follow-up reads, each itself an RPC call.
-- **Aggregates** — `todo_count` and `completed_count` (a filtered count) are
-  computed by the server's data layer; the client mirrors them as loadable
-  stubs and just asks for them by name.
-- **Calculations** — `Todo.overdue?` is a real expression on the server; the
-  client stub only knows its name and type, the server supplies the value.
-- **Enum type** — `Priority` round-trips through codegen as a named type.
-- **Validations** — `Todo`'s `string_length(:title, min: 3)` is mirrored onto
-  the generated client resource: the form rejects short titles instantly,
-  client-side, with no RPC; the server still enforces it on every write.
-
-## Exposing actions (server)
-
-The backend declares what's exposed, ash_typescript-style:
-
-```elixir
-# todo_server/lib/todo_server/domain.ex
-use Ash.Domain, extensions: [AshRemote.Rpc]
-
-rpc do
-  resource TodoServer.Todo do
-    expose :read
-    expose :create
-    expose :update
-    expose :destroy
-  end
-
-  resource TodoServer.TodoList do
-    expose :read
-    expose :create
-  end
-
-  resource TodoServer.User do
-    expose :read
-    expose :create
-  end
-end
-```
-
-and mounts the built-in router (no custom RPC code):
-
-```elixir
-# todo_server/lib/todo_server/rpc_router.ex
-use AshRemote.Server.Router, otp_app: :todo_server
-```
-
-## Look at it (browser)
-
-Two shells:
+## Run it (two users, live)
 
 ```sh
-# 1) the backend (http://localhost:4010, manifest at /manifest.json)
+# 1) the server (auth + RPC + socket on http://localhost:4010)
 cd example/todo_server && mix run --no-halt
+#    seeds ada@example.com and grace@example.com (password: password123)
 
-# 2) the LiveView client — then open http://localhost:4001
-cd example/todo_client && mix run --no-halt
+# 2) client instance A — Ada, at http://localhost:4001
+cd example/todo_client && WEB_PORT=4001 TODO_EMAIL=ada@example.com mix run --no-halt
+
+# 3) client instance B — Grace, at http://localhost:4002
+cd example/todo_client && WEB_PORT=4002 TODO_EMAIL=grace@example.com mix run --no-halt
 ```
 
-## Automated end-to-end test (no browser needed)
+Open both pages. Then:
 
-`todo_client`'s test boots the backend's RPC router in-process and drives the
-LiveView (mount → create → toggle → delete), asserting each change round-tripped
-to the server:
+- Add a **private** todo in Ada's page → it appears for Ada only; Grace never
+  sees it.
+- Add a **public** todo (tick the box) in either page → it appears in **both**,
+  live.
+- Toggle/delete a public todo in one page → the other updates live.
+
+The server console can drive it too: an
+`Ash.create!(TodoServer.Todo, %{…, public: true}, actor: user)` shows up in
+every client immediately.
+
+## Automated end-to-end test (no browser)
 
 ```sh
 cd example/todo_client && mix test
@@ -108,18 +85,14 @@ cd example/todo_client && mix test
 
 ## Regenerate the client resources
 
-Both steps are wired as mix aliases (see each `mix.exs`):
-
 ```sh
 cd todo_server && mix manifest.publish   # writes ../todo_client/priv/manifest.json
 cd ../todo_client && mix remote.gen      # ash_remote.gen → lib/todo_client/remote/*
 ```
 
-Regeneration is non-destructive: existing modules only gain what the manifest
-added; your own edits and additions are kept. Anything that drifts from the
-manifest (an entity you changed, or one the server removed) is reported as a
-warning — add `--interactive` to `mix ash_remote.gen` to resolve each one
-interactively instead.
+The manifest advertises a `realtime` block, so generated resources gain
+`realtime? true` automatically. Regeneration is non-destructive; add
+`--interactive` to resolve drift.
 
-> `ash` comes from Hex (`~> 3.29`, for `Ash.Info.Manifest`); `ash_remote` is a
-> relative path dep (`../..`).
+> `ash`/`ash_authentication` come from Hex; `ash_remote` is a relative path dep
+> (`../..`).
