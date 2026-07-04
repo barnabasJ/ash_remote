@@ -4,7 +4,7 @@ import Config
 # `Ash.Info.Manifest.generate/1` discovers domains via `Ash.Info.domains(:ash_remote)`,
 # which reads this config.
 if config_env() == :test do
-  config :ash_remote, ash_domains: [AshRemote.Backend.Domain]
+  config :ash_remote, ash_domains: [AshRemote.Backend.Domain, AshRemote.Backend.SecureDomain]
 
   # Websocket-only Phoenix endpoint for the realtime tests, alongside the Bandit
   # HTTP reference backend on 4747 (do not disturb that). Started by

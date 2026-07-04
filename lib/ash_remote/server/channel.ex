@@ -13,15 +13,21 @@ if Code.ensure_loaded?(Phoenix.Channel) do
          segment, an untenanted resource rejects one;
       4. calls the host socket's `authorize_subscription/4` (default deny).
 
-    There is no `handle_in`/intercept: `AshRemote.Server.Notifier` broadcasts land
-    on the joined topic and Phoenix fast-lanes them straight to the client as the
-    `"notification"` event.
+    Broadcasts are **intercepted per subscriber**: `handle_out/3` re-checks that
+    the subscriber's actor may read the specific record (`Ash.can?({record,
+    :read}, actor)`) and only then pushes the `"notification"` event. Join
+    authorizes the topic; this authorizes each record — so a broadcast never
+    reveals a row the actor could not have read. The actor is read from
+    `socket.assigns[:ash_remote_actor]` (set by the host socket's `connect/3` or
+    `authorize_subscription/4`). Resources with no authorizers skip the check.
     """
     use Phoenix.Channel
 
     require Logger
 
-    alias AshRemote.Topics
+    alias AshRemote.{Decoder, Topics}
+
+    intercept(["notification"])
 
     @impl true
     def join("ash_remote:" <> _ = topic, params, socket) do
@@ -29,13 +35,52 @@ if Code.ensure_loaded?(Phoenix.Channel) do
            {:ok, resource} <- resolve_resource(socket, source),
            :ok <- check_tenant(resource, tenant),
            {:ok, socket} <- authorize(socket, resource, tenant, params) do
-        {:ok, socket}
+        {:ok, assign(socket, :ash_remote_resource, resource)}
       else
         {:error, reason} -> {:error, %{reason: reason}}
       end
     end
 
     def join(_topic, _params, _socket), do: {:error, %{reason: "unknown_topic"}}
+
+    # Per-record authorization: only push a broadcast to this subscriber if its
+    # actor may read the record. Broadcasts fan out to every topic subscriber, so
+    # this is where row-level read policies are enforced.
+    @impl true
+    def handle_out("notification", payload, socket) do
+      if visible?(payload, socket) do
+        push(socket, "notification", payload)
+      end
+
+      {:noreply, socket}
+    end
+
+    defp visible?(payload, socket) do
+      resource = socket.assigns.ash_remote_resource
+
+      # No authorizers → nothing to enforce (and no `Ash.can?` overhead).
+      if Ash.Resource.Info.authorizers(resource) == [] do
+        true
+      else
+        actor = socket.assigns[:ash_remote_actor]
+        record = reconstruct(resource, payload)
+        authorized_to_read?(record, actor)
+      end
+    end
+
+    defp reconstruct(resource, payload) do
+      {_fields, plan} = Decoder.write_fields(resource)
+      Decoder.decode_record(payload["data"], resource, plan)
+    end
+
+    # Deny (drop the notification) if the check errors — fail closed.
+    defp authorized_to_read?(record, actor) do
+      Ash.can?({record, :read}, actor)
+    rescue
+      error ->
+        Logger.warning("ash_remote: subscription authorization check failed: #{inspect(error)}")
+        false
+    end
 
     defp parse_topic(topic) do
       case Topics.parse(topic) do

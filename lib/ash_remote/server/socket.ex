@@ -23,14 +23,29 @@ defmodule AshRemote.Server.Socket do
 
   ## Authorization
 
-  Channel join is the authorization gate, and it **defaults to deny** — realtime
-  broadcasts bypass read policies, so an allow-all default would leak by
-  construction. Override `authorize_subscription/4`; return `:ok` (or
-  `{:ok, socket}`) to allow, anything else to deny.
+  There are two layers:
+
+    * **Topic (join) gate** — `authorize_subscription/4`, which **defaults to
+      deny**. Return `:ok` (or `{:ok, socket}`) to allow, anything else to deny.
+    * **Per-record gate** — every broadcast is re-checked against the
+      subscriber's actor with `Ash.can?({record, :read}, actor)` before it is
+      pushed, so a subscription never reveals a row the actor could not read
+      (see `AshRemote.Server.Channel`). Resources without authorizers skip it.
+
+  Assign the actor for the per-record check to `:ash_remote_actor` on the socket
+  — typically in an overridden `connect/3` that authenticates the connection
+  token, or in `authorize_subscription/4` (returning `{:ok, socket}`):
+
+      def connect(%{"token" => token}, socket, _info) do
+        case MyApp.verify(token) do
+          {:ok, user} -> {:ok, Phoenix.Socket.assign(socket, :ash_remote_actor, user)}
+          _ -> :error
+        end
+      end
 
   For local development you can set
   `config :ash_remote, :dangerously_allow_all_subscriptions, true` to bypass the
-  gate entirely (logged, once).
+  join gate entirely (logged, once). It does not bypass the per-record check.
   """
 
   @typedoc "Return `:ok`/`{:ok, socket}` to allow the subscription, anything else denies."
