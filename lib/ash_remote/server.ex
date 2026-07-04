@@ -36,6 +36,14 @@ defmodule AshRemote.Server do
     otp_app |> entrypoints() |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
   end
 
+  @doc "The realtime-published `{resource, action}` pairs across an OTP app's `AshRemote.Rpc` domains."
+  def publications(otp_app) do
+    otp_app
+    |> Ash.Info.domains()
+    |> Enum.filter(&AshRemote.Rpc.Info.rpc?/1)
+    |> Enum.flat_map(&AshRemote.Rpc.Info.publications/1)
+  end
+
   @doc "Generate the exposed surface as a JSON `Ash.Info.Manifest` (exactly the `rpc do` block)."
   def manifest_json(otp_app) do
     {:ok, spec} =
