@@ -35,6 +35,14 @@ defmodule AshRemote.Resource do
         default: [],
         doc: "Client action name → backend action name overrides (defaults to identity)."
       ],
+      realtime?: [
+        type: :boolean,
+        default: false,
+        doc:
+          "Subscribe to server-pushed realtime notifications for this resource. " <>
+            "`AshRemote.Realtime` auto-joins a channel topic per realtime resource and " <>
+            "re-emits a local Ash notification for each broadcast."
+      ],
       schema_version: [
         type: :string,
         required: false,
