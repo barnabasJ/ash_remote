@@ -3,12 +3,55 @@ defmodule AshRemote.Manifest.Loader do
   Loads a manifest from a file path or URL, validates its `schema_version`, and
   normalizes the JSON into `AshRemote.Manifest.*` structs. Tolerant of unknown
   fields.
+
+  **Trust requirement (R-8)**: `load/2`/`load!/2` must only be pointed at a
+  manifest you trust (your own backend's `/manifest.json`, or a file you
+  control) — not arbitrary user input. Vocabulary fields (`kind`,
+  `cardinality`, action `type`, …) are resolved via `String.to_existing_atom/1`
+  against a closed, known set, so a garbled manifest raises a clear error
+  naming the offending key rather than silently minting atoms, but a
+  sufficiently large *number* of distinct garbage manifests loaded over time
+  is still attacker-controlled work for this process, same as parsing any
+  untrusted document.
   """
 
   alias AshRemote.Manifest
   alias AshRemote.Manifest.{Action, Argument, Field, Relationship, Resource, Type, Validation}
 
   @supported_major "1"
+
+  # R-8: `to_existing_atom/1` only finds an atom that some already-loaded
+  # module referenced as a literal — which module happens to have loaded
+  # first is otherwise an accident of test/boot order (e.g. `:uuid` is a
+  # literal in `Ash.Type.Registry`'s module attributes, but nothing
+  # guarantees THAT module is loaded before a manifest is). Listing the full
+  # closed vocabulary here as literals means these atoms exist the moment
+  # THIS module loads, independent of load order elsewhere.
+  @known_atoms [
+    # AshRemote.Manifest.Field.kind
+    :attribute,
+    :aggregate,
+    :calculation,
+    # AshRemote.Manifest.Type.kind (structural, non-primitive)
+    :type_ref,
+    :enum,
+    # AshRemote.Manifest.Relationship.type / .cardinality
+    :belongs_to,
+    :has_one,
+    :has_many,
+    :many_to_many,
+    :one,
+    :many,
+    # AshRemote.Manifest.Action.type
+    :read,
+    :create,
+    :update,
+    :destroy,
+    :action
+  ] ++ Keyword.keys(Ash.Type.short_names())
+
+  @doc false
+  def known_atoms, do: @known_atoms
 
   @doc "Load and normalize a manifest from a path or http(s) URL."
   @spec load(String.t(), keyword()) :: {:ok, Manifest.t()} | {:error, term()}
@@ -129,7 +172,7 @@ defmodule AshRemote.Manifest.Loader do
       module: module,
       embedded?: resource["embedded"] || false,
       description: resource["description"],
-      primary_key: Enum.map(resource["primary_key"] || [], &atom/1),
+      primary_key: Enum.map(resource["primary_key"] || [], &atom(&1, "resources.#{module}.primary_key")),
       fields: normalize_fields(resource["fields"] || %{}),
       relationships: normalize_relationships(resource["relationships"] || %{}),
       identities: normalize_identities(resource["identities"] || %{}),
@@ -144,7 +187,7 @@ defmodule AshRemote.Manifest.Loader do
       %Validation{
         module: validation["module"],
         opts: validation["opts"],
-        on: Enum.map(validation["on"] || [], &atom/1),
+        on: Enum.map(validation["on"] || [], &atom(&1, "validations.on")),
         where:
           Enum.map(validation["where"] || [], fn condition ->
             %{module: condition["module"], opts: condition["opts"]}
@@ -164,9 +207,9 @@ defmodule AshRemote.Manifest.Loader do
   defp normalize_field(name, field) do
     %Field{
       name: name,
-      kind: atom(field["kind"]),
-      type: normalize_type(field["type"]),
-      aggregate_kind: atom(field["aggregate_kind"]),
+      kind: atom(field["kind"], "fields.#{name}.kind"),
+      type: normalize_type(field["type"], "fields.#{name}.type"),
+      aggregate_kind: atom(field["aggregate_kind"], "fields.#{name}.aggregate_kind"),
       description: field["description"],
       allow_nil?: field["allow_nil"],
       writable?: field["writable"] || false,
@@ -192,16 +235,18 @@ defmodule AshRemote.Manifest.Loader do
     Enum.map(list, fn %{"name" => name} = entry -> %{name: name, rhs: entry["rhs"]} end)
   end
 
-  defp normalize_type(nil), do: nil
+  defp normalize_type(type, key_prefix \\ "type")
 
-  defp normalize_type(type) do
+  defp normalize_type(nil, _key_prefix), do: nil
+
+  defp normalize_type(type, key_prefix) do
     %Type{
-      kind: atom(type["kind"]),
+      kind: atom(type["kind"], "#{key_prefix}.kind"),
       name: type["name"],
       module: type["module"],
       values: type["values"],
       constraints: type["constraints"],
-      item_type: normalize_type(type["item_type"]),
+      item_type: normalize_type(type["item_type"], "#{key_prefix}.item_type"),
       instance_of: type["instance_of"]
     }
   end
@@ -211,12 +256,13 @@ defmodule AshRemote.Manifest.Loader do
       {name,
        %Relationship{
          name: name,
-         type: atom(rel["type"]),
-         cardinality: atom(rel["cardinality"]),
+         type: atom(rel["type"], "relationships.#{name}.type"),
+         cardinality: atom(rel["cardinality"], "relationships.#{name}.cardinality"),
          destination: rel["destination"],
          description: rel["description"],
-         source_attribute: atom(rel["source_attribute"]),
-         destination_attribute: atom(rel["destination_attribute"]),
+         source_attribute: atom(rel["source_attribute"], "relationships.#{name}.source_attribute"),
+         destination_attribute:
+           atom(rel["destination_attribute"], "relationships.#{name}.destination_attribute"),
          allow_nil?: rel["allow_nil"]
        }}
     end)
@@ -224,17 +270,17 @@ defmodule AshRemote.Manifest.Loader do
 
   defp normalize_identities(identities) do
     Map.new(identities, fn {name, %{"keys" => keys}} ->
-      {name, Enum.map(keys, &atom/1)}
+      {name, Enum.map(keys, &atom(&1, "identities.#{name}.keys"))}
     end)
   end
 
   defp normalize_action(action) do
     %Action{
       name: action["name"],
-      type: atom(action["type"]),
+      type: atom(action["type"], "actions.#{action["name"]}.type"),
       primary?: action["primary"] || false,
       get?: action["get"] || false,
-      returns: normalize_type(action["returns"]),
+      returns: normalize_type(action["returns"], "actions.#{action["name"]}.returns"),
       pagination: action["pagination"],
       inputs: normalize_arguments(action["inputs"])
     }
@@ -254,7 +300,23 @@ defmodule AshRemote.Manifest.Loader do
     end)
   end
 
-  defp atom(nil), do: nil
-  defp atom(value) when is_atom(value), do: value
-  defp atom(value) when is_binary(value), do: String.to_atom(value)
+  # R-8: `String.to_existing_atom/1`, never `String.to_atom/1` — the manifest's
+  # vocabulary (kinds, cardinalities, action types, …) is a closed set of atoms
+  # Ash itself already defines by the time a manifest loads, so nothing
+  # legitimate ever needs a NEW atom here. A raw `ArgumentError` on a bad
+  # manifest is a cryptic failure, though — name the offending key so the
+  # operator can find it. `load/2`'s moduledoc documents that it must only be
+  # pointed at a trusted manifest (this guards against a garbled/malicious one
+  # minting atoms, not against a legitimately-untrusted source in general).
+  defp atom(nil, _key), do: nil
+  defp atom(value, _key) when is_atom(value), do: value
+
+  defp atom(value, key) when is_binary(value) do
+    String.to_existing_atom(value)
+  rescue
+    ArgumentError ->
+      raise ArgumentError,
+            "manifest key #{inspect(key)} names #{inspect(value)}, which is not a known Ash " <>
+              "vocabulary atom — load/2 must only be pointed at a trusted manifest"
+  end
 end

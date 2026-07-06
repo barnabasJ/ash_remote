@@ -6,10 +6,15 @@ defmodule AshRemote.Encode.Filter do
   Only the common operators (`==`, `!=`, `in`, `<`, `>`, `<=`, `>=`, `is_nil`) are
   encoded; anything else raises at build time.
 
-  Optional gating: pass `:applicable` — a map of `field_name => [operator_name]`,
-  intended to come from the manifest's per-field `filter_operators`. An operator not
-  in a field's list raises a clear error. (Auto-populating `:applicable` from the
-  embedded manifest capabilities is not yet wired — see the plan.)
+  R-10: this used to accept an `:applicable` gate (a map of
+  `field_name => [operator_name]`), but `remote_config/1` never actually
+  populated it — `applicable: nil` unconditionally, on every call site — so
+  the gate was permanently a no-op. Deleted rather than wired up: the server
+  remains the real authority on which operators a field supports, and the
+  manifest data this would have gated on still survives in the loader's
+  normalized `filter_operators` for a future re-introduction (which would
+  also need to extend the generator, since it doesn't currently emit
+  per-field operator info at all).
   """
 
   alias Ash.Query.{BooleanExpression, Not, Ref}
@@ -26,37 +31,36 @@ defmodule AshRemote.Encode.Filter do
   }
 
   @doc "Encode a filter into a wire map, or `nil` when there is no filter."
-  def encode(filter, opts \\ [])
-  def encode(nil, _opts), do: nil
-  def encode(%Ash.Filter{expression: nil}, _opts), do: nil
-  def encode(%Ash.Filter{expression: expression}, opts), do: encode_expr(expression, opts)
-  def encode(expression, opts), do: encode_expr(expression, opts)
+  def encode(filter)
+  def encode(nil), do: nil
+  def encode(%Ash.Filter{expression: nil}), do: nil
+  def encode(%Ash.Filter{expression: expression}), do: encode_expr(expression)
+  def encode(expression), do: encode_expr(expression)
 
-  defp encode_expr(nil, _opts), do: nil
-  defp encode_expr(true, _opts), do: %{}
+  defp encode_expr(nil), do: nil
+  defp encode_expr(true), do: %{}
 
-  defp encode_expr(%BooleanExpression{op: op, left: left, right: right}, opts) do
-    %{to_string(op) => [encode_expr(left, opts), encode_expr(right, opts)]}
+  defp encode_expr(%BooleanExpression{op: op, left: left, right: right}) do
+    %{to_string(op) => [encode_expr(left), encode_expr(right)]}
   end
 
-  defp encode_expr(%Not{expression: expression}, opts) do
-    %{"not" => encode_expr(expression, opts)}
+  defp encode_expr(%Not{expression: expression}) do
+    %{"not" => encode_expr(expression)}
   end
 
-  defp encode_expr(%mod{left: %Ref{} = ref, right: right}, opts) do
-    predicate(mod, ref, right, opts)
+  defp encode_expr(%mod{left: %Ref{} = ref, right: right}) do
+    predicate(mod, ref, right)
   end
 
   # is_nil stores its boolean on `right` too; handled by the clause above.
-  defp encode_expr(other, _opts) do
+  defp encode_expr(other) do
     raise ArgumentError,
           "AshRemote cannot encode filter expression #{inspect(other)} for the remote backend"
   end
 
-  defp predicate(mod, ref, right, opts) do
+  defp predicate(mod, ref, right) do
     op = Map.get(@op_names, mod) || raise_unsupported(mod)
     field = ref_name(ref)
-    gate!(field, op, opts)
 
     # A parameterized calculation carries its arguments; the backend's
     # `filter_input` reads them from an `"input"` key alongside the operator.
@@ -91,24 +95,6 @@ defmodule AshRemote.Encode.Filter do
 
   defp value(%MapSet{} = set), do: MapSet.to_list(set)
   defp value(value), do: value
-
-  defp gate!(_field, _op, opts) when opts == [], do: :ok
-
-  defp gate!(field, op, opts) do
-    case Keyword.get(opts, :applicable) do
-      nil ->
-        :ok
-
-      applicable ->
-        allowed = Map.get(applicable, field, [])
-
-        unless op in allowed do
-          raise ArgumentError,
-                "operator #{inspect(op)} is not supported for field #{inspect(field)} " <>
-                  "by the remote backend (allowed: #{inspect(allowed)})"
-        end
-    end
-  end
 
   defp raise_unsupported(mod) do
     raise ArgumentError, "AshRemote cannot encode filter operator #{inspect(mod)}"

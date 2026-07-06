@@ -5,7 +5,7 @@ defmodule AshRemote.EncodeTest do
 
   alias AshRemote.Encode.{Filter, Sort}
 
-  describe "Filter.encode/2" do
+  describe "Filter.encode/1" do
     test "nil filter → nil" do
       assert Filter.encode(nil) == nil
     end
@@ -27,18 +27,6 @@ defmodule AshRemote.EncodeTest do
       assert %{"title" => %{"eq" => "x"}} = right
     end
 
-    test "gating raises for a disallowed operator" do
-      filter = filter_of(AshRemote.Client.Todo, expr(title == "x"))
-
-      assert_raise ArgumentError, ~r/not supported for field :title/, fn ->
-        Filter.encode(filter, applicable: %{title: ["in"]})
-      end
-    end
-
-    test "gating allows a permitted operator" do
-      filter = filter_of(AshRemote.Client.Todo, expr(title == "x"))
-      assert Filter.encode(filter, applicable: %{title: ["eq"]}) == %{"title" => %{"eq" => "x"}}
-    end
   end
 
   describe "Sort.encode/1" do
