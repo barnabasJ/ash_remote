@@ -78,7 +78,9 @@ defmodule TodoClient.Remote.Todo do
   actions do
     create :create do
       primary?(true)
-      accept([:title, :completed, :public, :priority, :due_date, :list_id, :parent_id])
+      # :version accepted so it survives AshRemote's accepted-keys wire filter (see
+      # TodoClient.Local.Todo) and replicates.
+      accept([:title, :completed, :public, :priority, :due_date, :list_id, :parent_id, :version])
       change(TodoClient.BumpVersion)
     end
 
@@ -95,7 +97,7 @@ defmodule TodoClient.Remote.Todo do
     update :update do
       primary?(true)
       require_atomic?(false)
-      accept([:title, :completed, :public, :priority, :due_date, :list_id, :parent_id])
+      accept([:title, :completed, :public, :priority, :due_date, :list_id, :parent_id, :version])
       change(TodoClient.BumpVersion)
     end
   end

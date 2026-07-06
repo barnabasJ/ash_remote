@@ -89,16 +89,21 @@ defmodule TodoClient.Local.Todo do
   actions do
     defaults([:read, :destroy])
 
+    # `:version` is accepted (not just force-changed by BumpVersion) so it is in
+    # `AshRemote.DataLayer`'s accepted-keys wire filter and actually replicates on
+    # the flush — otherwise the server never advances its version and a rapid
+    # second edit stale-checks a local (bumped) base against a stale (un-advanced)
+    # remote, producing a phantom conflict.
     create :create do
       primary?(true)
-      accept([:id, :title, :completed, :public, :priority, :due_date])
+      accept([:id, :title, :completed, :public, :priority, :due_date, :version])
       change(TodoClient.BumpVersion)
     end
 
     update :update do
       primary?(true)
       require_atomic?(false)
-      accept([:title, :completed, :public, :priority, :due_date])
+      accept([:title, :completed, :public, :priority, :due_date, :version])
       change(TodoClient.BumpVersion)
     end
   end
