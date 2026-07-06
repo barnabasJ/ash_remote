@@ -128,16 +128,28 @@ Two layers, both enforced:
   Ash — an upstream auth plug sets it via `Ash.PlugHelpers` (RPC), or the host
   socket's `connect/3` assigns `:ash_remote_actor` (realtime). Both integrate
   directly with `ash_authentication`.
-- **Per-record**: every broadcast is re-checked with
-  `Ash.can?({record, :read}, actor)` before it is pushed, so a subscription
-  never reveals a row the actor could not have read (resources without policies
-  skip the check).
+- **Per-record**: the actor's read-policy filter is computed once at join and
+  every broadcast is checked against it in-memory before it is pushed (with a
+  single authorized re-read by pk as fallback), so a subscription never reveals
+  a row the actor could not have read (resources without policies skip the
+  check).
 
 To authenticate, pass the actor — a token in the actor's metadata
 (`Ash.read!(RemoteTodo, actor: signed_in_user)`) is auto-forwarded as a Bearer
 header, or set explicit `context: %{ash_remote: %{headers: %{…}}}`. See
 `example/todo_server` + `example/todo_client` for a full `ash_authentication`
 demo (owner-only vs public todos, live).
+
+### Composing with ash_multi_datalayer
+
+`AshRemote.DataLayer` supports pk-based `upsert`, making it a valid asynchronous
+replication target for `ash_multi_datalayer`'s LocalOutbox strategy (local-first
+writes, background flush). `AshRemote.MultiDatalayer` ships the glue for the
+inbound direction: `ChangeNotifier` forwards realtime pushes into the layered
+resource's orchestrator, and `LifecycleGuard` turns socket lifecycle events
+(resubscribe, join denial) into refresh/reconcile signals. Requires the optional
+`:ash_multi_datalayer` dep; see the `AshRemote.MultiDatalayer` moduledoc and
+`example/README.md` for a full offline-first demo.
 
 ### Limitations (v1)
 
@@ -147,22 +159,23 @@ demo (owner-only vs public todos, live).
 
 ## Layout
 
-| Path                                                 | What                                                                                                      |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `lib/ash_remote/transport/`                          | `AshRemote.Transport` behaviour + `Req` implementation                                                    |
-| `lib/ash_remote/realtime.ex`, `realtime/`            | client realtime supervisor, Slipstream connection, inbound replication                                    |
-| `lib/ash_remote/server/{notifier,socket,channel}.ex` | server broadcast notifier + Phoenix socket/channel (join + per-record auth)                               |
-| `lib/ash_remote/topics.ex`, `decoder.ex`             | shared topic naming + wire-record decoding                                                                |
-| `lib/ash_remote/protocol.ex`                         | pure request-body build / response parse                                                                  |
-| `lib/ash_remote/error.ex`                            | wire errors → `Ash.Error.*`                                                                               |
-| `lib/ash_remote/encode/`                             | `Ash.Query` → wire (fields, filter, sort, pagination)                                                     |
-| `lib/ash_remote/data_layer.ex`                       | `AshRemote.DataLayer` (implements `Ash.DataLayer`)                                                        |
-| `lib/ash_remote/resource.ex`                         | `AshRemote.Resource` extension (`remote do ... end`)                                                      |
-| `lib/ash_remote/manifest/`                           | manifest loader + normalized structs                                                                      |
-| `lib/ash_remote/gen/`                                | manifest → resource source                                                                                |
-| `lib/ash_remote/server.ex`, `server/`                | server-side RPC core + `AshRemote.Server.Router` plug (ported from ash_typescript; mount it in a backend) |
-| `lib/mix/tasks/ash_remote.gen.ex`                    | the Igniter generator task                                                                                |
-| `test/support/backend/`                              | a reference backend that mounts `AshRemote.Server.Router`                                                 |
+| Path                                                    | What                                                                                                      |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `lib/ash_remote/transport/`                             | `AshRemote.Transport` behaviour + `Req` implementation                                                    |
+| `lib/ash_remote/realtime.ex`, `realtime/`               | client realtime supervisor, Slipstream connection, inbound replication                                    |
+| `lib/ash_remote/server/{notifier,socket,channel}.ex`    | server broadcast notifier + Phoenix socket/channel (join + per-record auth)                               |
+| `lib/ash_remote/topics.ex`, `decoder.ex`                | shared topic naming + wire-record decoding                                                                |
+| `lib/ash_remote/multi_datalayer.ex`, `multi_datalayer/` | optional glue for `ash_multi_datalayer` (inbound change notifier + lifecycle guard)                       |
+| `lib/ash_remote/protocol.ex`                            | pure request-body build / response parse                                                                  |
+| `lib/ash_remote/error.ex`                               | wire errors → `Ash.Error.*`                                                                               |
+| `lib/ash_remote/encode/`                                | `Ash.Query` → wire (fields, filter, sort, pagination)                                                     |
+| `lib/ash_remote/data_layer.ex`                          | `AshRemote.DataLayer` (implements `Ash.DataLayer`)                                                        |
+| `lib/ash_remote/resource.ex`                            | `AshRemote.Resource` extension (`remote do ... end`)                                                      |
+| `lib/ash_remote/manifest/`                              | manifest loader + normalized structs                                                                      |
+| `lib/ash_remote/gen/`                                   | manifest → resource source                                                                                |
+| `lib/ash_remote/server.ex`, `server/`                   | server-side RPC core + `AshRemote.Server.Router` plug (ported from ash_typescript; mount it in a backend) |
+| `lib/mix/tasks/ash_remote.gen.ex`                       | the Igniter generator task                                                                                |
+| `test/support/backend/`                                 | a reference backend that mounts `AshRemote.Server.Router`                                                 |
 
 ## Tests
 

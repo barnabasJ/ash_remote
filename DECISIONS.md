@@ -144,10 +144,15 @@
   `Ash.Notifier.PubSub` dereferences `changeset.resource`/`.to_tenant` for
   `:_pkey`/`:_tenant` topics.
 - **Two-layer auth.** Join is a topic gate (default deny). Every broadcast is
-  then re-checked per subscriber with `Ash.can?({record, :read}, actor)` in the
-  channel's `handle_out` — broadcasts fan out to all topic subscribers, so
-  row-level read policies must be enforced there, not at broadcast time.
-  Resources without authorizers skip it.
+  then checked per subscriber in the channel's `handle_out` — broadcasts fan out
+  to all topic subscribers, so row-level read policies must be enforced there,
+  not at broadcast time. Resources without authorizers skip it. _(Superseded
+  mechanism, 2026-07-05: the original per-broadcast
+  `Ash.can?({record, :read}, actor)` call was replaced with the ash_graphql
+  approach — the actor's read-policy filter is computed once at join
+  (`Ash.can(query, actor, run_queries?: false, alter_source?: true)`) and each
+  notification is matched in-memory via `Ash.Expr.eval/2`, with a single
+  authorized pk re-read as fallback, skipped for destroys.)_
 - **Auth threading mirrors ash_typescript.** RPC resolves the actor from the
   conn via `Ash.PlugHelpers` (host plugs `ash_authentication`); the socket
   resolves it in the host's `connect/3`. Both run every action with that actor.
@@ -160,8 +165,109 @@
   each guarded by `Code.ensure_loaded?/1` so a client-only app compiles without
   Phoenix.
 
+## Composing with ash_multi_datalayer (2026-07-05/06)
+
+- **PK-upsert as the LocalOutbox replication target.** `AshRemote.DataLayer`
+  answers `can?(:upsert)` for pk-based upserts so `ash_multi_datalayer`'s
+  LocalOutbox strategy can flush local-first writes to the backend idempotently
+  under retries.
+- **ash_remote_cache folded in.** Its lib dissolved into
+  `AshRemote.MultiDatalayer.{ChangeNotifier, LifecycleGuard}` (optional
+  `ash_multi_datalayer` dep); its example became `example/` here. The glue is
+  strategy-agnostic: inbound realtime pushes route through the layered
+  resource's orchestrator, lifecycle events become refresh/reconcile signals.
+- **Source-map fan-out.** `Realtime` groups subscriptions by backend
+  source/topic, so multiple client mirrors of one backend resource each react to
+  a push (previously last-writer-wins in the source map dropped all but one).
+
+## Whole-repo review fixes (2026-07-06)
+
+- **Tenant travels on the wire, not just in the conn.** `Protocol.build_run`/
+  `build_validate` gained an optional `"tenant"` key (absent = old wire shape,
+  backward compatible); the client threads `query.tenant`/`changeset.to_tenant`
+  through `run_query/2`, `write/5` (create/update), `destroy/2`, and
+  `fetch_remote_calculations/4`. Server resolves wire-first, falling back to
+  the conn's tenant. Explicitly documented as **input to Ash multitenancy, not
+  an auth claim** — policies must still scope actors to tenants server-side.
+  `validate_action/2` became `/3` (opts: actor/tenant) in the same change as
+  threading the actor into it — the router's `/rpc/validate` call site changed
+  in the same commit, since the two were independently broken in the same way
+  (neither actor nor tenant reached the validate path at all).
+- **No `Module.concat`/`String.to_atom` on wire input, anywhere.**
+  `AshRemote.Server.ResourceResolver` precomputes a string→module map per
+  `{otp_app, site}` (RPC exposure vs. realtime publications are different
+  sets — separate cache keys, `:persistent_term`), used by both
+  `Server.resolve_resource/2` and `Server.Channel.resolve_resource/2`.
+  `AshMultiDatalayer.Orchestrator.LocalOutbox.HostResolver` (sibling repo)
+  applies the same pattern for outbox entries. `Manifest.Loader.atom/2` moved
+  from `String.to_atom/1` to `String.to_existing_atom/1` against an explicit,
+  compile-time-primed vocabulary list (so load order elsewhere in the app
+  never matters), naming the offending manifest key on failure.
+- **Realtime field-policy stripping is server-computed, not per-subscriber.**
+  `Server.Notifier` excludes policy-target fields (the fields a `field_policy`
+  applies TO, not fields merely referenced by a policy condition) from both
+  `payload/4`'s `"data"` and `changed/2`'s `"changed"` — computed once per
+  notification from `Ash.Policy.Info.field_policies_for_field/2`. Chosen over
+  per-subscriber evaluation for cost; a field-policied attribute never travels
+  over realtime — load it via an authorized RPC read instead.
+- **Transport errors are a typed Ash error.** `AshRemote.Error.Transport`
+  (`Ash.Error.Unknown`-class) wraps `{:transport_error, _}` /
+  `{:http_error, _, _}` in all four `request/4` call sites. Its `:unknown`
+  class classifies `:transient` in `ash_multi_datalayer`'s `Flush.classify/1`
+  (retry, then park) — the one cross-repo coupling in this fix round, landed
+  together with that classifier's own `:auth` class for `Forbidden`. Also
+  extended `Manifest.Error.to_exception/1` to map the wire type
+  `"invalid_changes"` (what a server-side identity/uniqueness pre-check
+  violation actually serializes as) to `Ash.Error.Changes.InvalidChanges`
+  (`class: :invalid`) instead of falling through to the `:unknown` catch-all —
+  needed so `upsert/3`'s collision detection (below) can key off `class:
+  :invalid` the way the rest of the error-handling code already does.
+- **`upsert/3`'s create-collision resolves to an update, once.** The
+  read-then-write deciding create-vs-update is not atomic — two concurrent
+  upserts for the same PK can both read `nil` and both attempt `create`; the
+  loser now re-reads on a `:invalid`-class create failure and retries as an
+  update instead of surfacing the collision. Does not close the window
+  entirely (a third concurrent write between the retry's read and its update
+  could still race) — a true fix needs a server-side identity upsert, filed as
+  a follow-up against the protocol.
+- **A durably-denied realtime topic is terminal for the socket process.**
+  `Connection` tracks denied topics in process state (`handle_topic_close`'s
+  `{:failed_to_join, _}` clause) and `handle_connect/1` excludes them from
+  every subsequent rejoin; `:join_denied` fires once, not once per reconnect.
+  The state resets only with the socket process itself — `connect_params` is
+  evaluated once in `init/1` and reused for the process's lifetime (the
+  previous "evaluated per connect" comment was wrong), so a durable denial
+  cannot be un-denied without a fresh connection process (e.g. a supervisor
+  restart with a new token).
+- **`safe_message/1` keys off Splode's `.class`, not a module allowlist.**
+  Mirrors `ash_json_api`'s `AshJsonApi.Error.to_json_api_errors/4` fallback
+  branch: `error.class in [:invalid, :forbidden]` is safe to show verbatim
+  (covers `Ash.Error.Invalid`, `Forbidden`, and every NotFound variant, all
+  `class: :invalid`); everything else — critically `:unknown`, what a raised
+  non-Ash exception becomes via `Ash.Error.to_error_class/1` — logs
+  server-side with a correlation id and returns a generic message. A
+  hardcoded module-name allowlist was tried first and missed
+  `Ash.Error.Changes.InvalidChanges` (not literally `Ash.Error.Invalid`).
+- **`ClientId.register/1` is idempotent.** Keeps the first id ever registered
+  for a base_url instead of overwriting on every call — `:persistent_term.put/2`
+  on an EXISTING key triggers a full VM-wide GC pass, so an unconditional
+  overwrite on every supervisor restart was needless global cost, and would
+  have changed the echo-correlation identity out from under in-flight
+  requests. One `AshRemote.Realtime` supervisor per base_url remains the
+  supported topology; a second registration for the same base_url logs once
+  and shares the existing identity by design.
+- **`Encode.Filter`'s `:applicable` gate deleted, not wired up.**
+  `remote_config/1` never actually populated it (`applicable: nil`
+  unconditionally), so the gate was permanently a no-op — the smaller, honest
+  fix is deletion. The manifest data it would have gated on survives in the
+  loader's normalized `filter_operators`/`filter_functions` for a future
+  reintroduction, which would also need to extend the generator (it doesn't
+  currently emit per-field operator info at all).
+
 ## Versions
 
 - Ash `~> 3.29` (hex, resolved 3.29.3). Elixir 1.18 / OTP 27.
 - Realtime optional deps: `phoenix ~> 1.7`, `phoenix_pubsub ~> 2.1`,
   `slipstream ~> 1.1`.
+- Composition optional deps: `ash_multi_datalayer` (path dep on the sibling
+  repo), `plug ~> 1.16`.
