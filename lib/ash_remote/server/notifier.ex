@@ -20,6 +20,15 @@ defmodule AshRemote.Server.Notifier do
   contract as `Ash.Notifier.PubSub`'s `module`, so no compile-time Phoenix
   dependency. Topic and payload shape live in `AshRemote.Topics` and this
   module's `payload/4`.
+
+  **Field policies (R-3)**: an attribute a field policy applies to NEVER
+  travels over realtime, in either `"data"` or `"changed"` — this notifier
+  broadcasts to every topic subscriber before any single subscriber's
+  policies are known, so per-subscriber field evaluation isn't cheap the way
+  a normal RPC read's is. `Server.Channel` already gates whole rows per
+  subscriber; field policies are strictly finer-grained than that and are
+  not evaluated here. Load a field-policied attribute via an authorized RPC
+  read instead.
   """
   use Ash.Notifier
 
@@ -75,6 +84,8 @@ defmodule AshRemote.Server.Notifier do
   def payload(notification, resource, source, tenant) do
     action = notification.action
     {fields, _plan} = Decoder.write_fields(resource)
+    policied = policy_target_fields(resource)
+    wire_fields = Enum.reject(fields, &MapSet.member?(policied, &1))
 
     %{
       "v" => @wire_version,
@@ -82,12 +93,30 @@ defmodule AshRemote.Server.Notifier do
       "resource" => source,
       "action" => %{"name" => to_string(action.name), "type" => to_string(action.type)},
       "tenant" => tenant && to_string(tenant),
-      "data" => Fields.serialize(notification.data, resource, fields),
-      "changed" => changed(notification, resource),
+      "data" => Fields.serialize(notification.data, resource, wire_fields),
+      "changed" => changed(notification, resource, policied),
       "origin" => %{"client_id" => client_id(notification)},
       "metadata" => sanitize(notification.metadata),
       "occurred_at" => DateTime.to_iso8601(DateTime.utc_now())
     }
+  end
+
+  # R-3: attributes a field policy applies TO (not attributes merely
+  # REFERENCED by a policy condition — pass-1 W4) never travel over realtime,
+  # in either serialized field: a row-visible subscriber otherwise received
+  # values RPC would deny them. Computed once per notification; field
+  # policies are rare enough that this isn't worth caching further. Load a
+  # field-policied attribute via authorized RPC instead.
+  defp policy_target_fields(resource) do
+    resource
+    |> Ash.Resource.Info.public_attributes()
+    |> Enum.filter(fn attr ->
+      case Ash.Policy.Info.field_policies_for_field(resource, attr.name) do
+        policies when policies in [nil, []] -> false
+        _policies -> true
+      end
+    end)
+    |> MapSet.new(&to_string(&1.name))
   end
 
   # The public attributes touched by this change, with their FINAL values pulled
@@ -95,7 +124,8 @@ defmodule AshRemote.Server.Notifier do
   # from `notification.data`, never from `changeset.attributes`, because an atomic
   # update stores Ash expressions there (from validations compiled to atomics),
   # which are not JSON-encodable.
-  defp changed(%{changeset: changeset} = notification, resource) when not is_nil(changeset) do
+  defp changed(%{changeset: changeset} = notification, resource, policied)
+       when not is_nil(changeset) do
     public = resource |> Ash.Resource.Info.public_attributes() |> MapSet.new(& &1.name)
 
     names =
@@ -103,11 +133,12 @@ defmodule AshRemote.Server.Notifier do
       |> Enum.uniq()
       |> Enum.filter(&MapSet.member?(public, &1))
       |> Enum.map(&to_string/1)
+      |> Enum.reject(&MapSet.member?(policied, &1))
 
     Fields.serialize(notification.data, resource, names)
   end
 
-  defp changed(_notification, _resource), do: %{}
+  defp changed(_notification, _resource, _policied), do: %{}
 
   defp client_id(%{changeset: %{context: context}}) when is_map(context) do
     get_in(context, [:ash_remote, :client_id])

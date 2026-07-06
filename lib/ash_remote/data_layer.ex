@@ -8,7 +8,7 @@ defmodule AshRemote.DataLayer do
   follow-up reads (each of which is itself a remote read), so no lateral-join
   support is advertised.
 
-  Transport/config is resolved via `config/1`: for generated resources it comes
+  Transport/config is resolved via `remote_config/1`: for generated resources it comes
   from the `AshRemote.Resource` extension (`remote do … end`); a hand-written
   resource without the extension can instead supply it via application env:
 
@@ -56,6 +56,10 @@ defmodule AshRemote.DataLayer do
   def can?(_resource, {:query_aggregate, _kind}), do: true
   def can?(_resource, :aggregate_filter), do: true
   def can?(_resource, :aggregate_sort), do: true
+  # R-1: a client resource must be able to declare `multitenancy do ... end` —
+  # the wire tenant is threaded through `run_query/2`/`write/5`/`destroy/2`
+  # (see `set_tenant/3`), never dropped.
+  def can?(_resource, :multitenancy), do: true
   # No lateral joins: Ash loads relationships via separate (batched) remote reads.
   def can?(_resource, {:join, _}), do: false
   def can?(_resource, :transact), do: false
@@ -109,9 +113,10 @@ defmodule AshRemote.DataLayer do
         resource: cfg.source,
         action: read_action_name(resource, cfg),
         fields: fields,
-        filter: Filter.encode(query.filter, applicable: cfg[:applicable]),
+        filter: Filter.encode(query.filter),
         sort: Sort.encode(query.sort),
-        page: Pagination.encode(query)
+        page: Pagination.encode(query),
+        tenant: query.tenant
       })
 
     with {:ok, response} <- request(cfg, :run, body, request_headers(query.context)),
@@ -119,7 +124,7 @@ defmodule AshRemote.DataLayer do
       {:ok, Decoder.decode_records(data, resource, plan)}
     else
       {:error, errors} when is_list(errors) -> {:error, AshRemote.Error.to_ash_error(errors)}
-      {:error, other} -> {:error, other}
+      {:error, other} -> {:error, AshRemote.Error.Transport.normalize(other)}
     end
   end
 
@@ -149,7 +154,8 @@ defmodule AshRemote.DataLayer do
       Protocol.build_run(%{
         resource: cfg.source,
         action: map_action(action.name, cfg),
-        primary_key: primary_key(changeset)
+        primary_key: primary_key(changeset),
+        tenant: changeset.to_tenant
       })
 
     with {:ok, response} <- request(cfg, :run, body, request_headers(changeset.context)),
@@ -157,7 +163,7 @@ defmodule AshRemote.DataLayer do
       :ok
     else
       {:error, errors} when is_list(errors) -> {:error, AshRemote.Error.to_ash_error(errors)}
-      {:error, other} -> {:error, other}
+      {:error, other} -> {:error, AshRemote.Error.Transport.normalize(other)}
     end
   end
 
@@ -171,11 +177,38 @@ defmodule AshRemote.DataLayer do
   # Backfill hands us an action-less changeset (attributes force-changed, `data`
   # empty), so set the resource's primary write action and, for the update path,
   # lift the primary key into `data` (where `update/2` addresses the row).
+  #
+  # R-7: this read-then-write is NOT atomic — two concurrent upserts for the
+  # same PK can both observe `{:ok, nil}` and both attempt `create`; the
+  # second collides against the server's own uniqueness check. Handle it: on
+  # a `:invalid`-class create failure, re-read and retry ONCE as an update —
+  # if the row exists now (the other upsert won the race), converge onto it
+  # instead of surfacing a collision the caller never asked about. This
+  # doesn't close the window (a THIRD concurrent write between the retry's
+  # read and its update could still race) — a true fix needs a server-side
+  # identity upsert, filed as a follow-up against the protocol.
   def upsert(resource, changeset, _keys) do
     case remote_pk_row(resource, changeset) do
-      {:ok, nil} -> create(resource, put_write_action(resource, changeset, :create))
+      {:ok, nil} -> create_or_retry_as_update(resource, changeset)
       {:ok, _row} -> update(resource, put_write_action(resource, changeset, :update))
       {:error, error} -> {:error, error}
+    end
+  end
+
+  defp create_or_retry_as_update(resource, changeset) do
+    case create(resource, put_write_action(resource, changeset, :create)) do
+      {:ok, record} ->
+        {:ok, record}
+
+      {:error, %{class: :invalid}} = collision ->
+        case remote_pk_row(resource, changeset) do
+          {:ok, nil} -> collision
+          {:ok, _row} -> update(resource, put_write_action(resource, changeset, :update))
+          {:error, _} -> collision
+        end
+
+      {:error, _} = error ->
+        error
     end
   end
 
@@ -209,7 +242,8 @@ defmodule AshRemote.DataLayer do
       resource: resource,
       domain: changeset.domain || Ash.Resource.Info.domain(resource),
       filter: Ash.Filter.parse!(resource, filter_map),
-      context: changeset.context || %{}
+      context: changeset.context || %{},
+      tenant: changeset.to_tenant
     }
 
     case run_query(query, resource) do
@@ -229,7 +263,8 @@ defmodule AshRemote.DataLayer do
           resource: cfg.source,
           action: map_action(action_name, cfg),
           input: input,
-          fields: fields
+          fields: fields,
+          tenant: changeset.to_tenant
         }
         |> maybe_put(:primary_key, primary_key)
       )
@@ -239,7 +274,7 @@ defmodule AshRemote.DataLayer do
       {:ok, Decoder.decode_record(data, resource, plan)}
     else
       {:error, errors} when is_list(errors) -> {:error, AshRemote.Error.to_ash_error(errors)}
-      {:error, other} -> {:error, other}
+      {:error, other} -> {:error, AshRemote.Error.Transport.normalize(other)}
     end
   end
 
@@ -272,7 +307,9 @@ defmodule AshRemote.DataLayer do
   data layer running (e.g. from a cache layer) — the whole requested bundle
   is fetched at once so sibling calculations share the round-trip.
   """
-  def fetch_remote_calculations(resource, pk_values, specs) do
+  @spec fetch_remote_calculations(module(), [term()], [map()], term()) ::
+          {:ok, %{atom() => %{String.t() => term()}}} | {:error, term()}
+  def fetch_remote_calculations(resource, pk_values, specs, tenant \\ nil) do
     cfg = remote_config(resource)
     [pk] = Ash.Resource.Info.primary_key(resource)
     pk_key = to_string(pk)
@@ -283,7 +320,8 @@ defmodule AshRemote.DataLayer do
         resource: cfg.source,
         action: read_action_name(resource, cfg),
         fields: [pk_key | Enum.map(specs, &calc_spec_field/1)],
-        filter: Filter.encode(filter, applicable: cfg[:applicable])
+        filter: Filter.encode(filter),
+        tenant: tenant
       })
 
     with {:ok, response} <- request(cfg, :run, body),
@@ -305,7 +343,7 @@ defmodule AshRemote.DataLayer do
        end)}
     else
       {:error, errors} when is_list(errors) -> {:error, AshRemote.Error.to_ash_error(errors)}
-      {:error, other} -> {:error, other}
+      {:error, other} -> {:error, AshRemote.Error.Transport.normalize(other)}
     end
   end
 
@@ -397,19 +435,23 @@ defmodule AshRemote.DataLayer do
   end
 
   @doc """
-  Resolve the remote wire config for a resource: `%{source, base_url, action_map,
-  applicable}`. Prefers the `AshRemote.Resource` extension (generated resources);
-  falls back to application env keyed by resource (for resources without the
-  extension). Public so the realtime subscriber can resolve source/base_url/
-  action_map for `realtime?` resources.
+  Resolve the remote wire config for a resource: `%{source, base_url,
+  action_map}`. Prefers the `AshRemote.Resource` extension (generated
+  resources); falls back to application env keyed by resource (for resources
+  without the extension). Public so the realtime subscriber can resolve
+  source/base_url/action_map for `realtime?` resources.
   """
+  @spec remote_config(module()) :: %{
+          source: String.t(),
+          base_url: String.t(),
+          action_map: map()
+        }
   def remote_config(resource) do
     if AshRemote.Resource.Info.remote?(resource) do
       %{
         source: AshRemote.Resource.Info.remote_source!(resource),
         base_url: base_url(resource),
-        action_map: Map.new(AshRemote.Resource.Info.remote_action_map!(resource)),
-        applicable: nil
+        action_map: Map.new(AshRemote.Resource.Info.remote_action_map!(resource))
       }
     else
       case Application.get_env(:ash_remote, :remote_config) do

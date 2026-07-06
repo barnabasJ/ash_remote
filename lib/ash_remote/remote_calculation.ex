@@ -64,12 +64,17 @@ defmodule AshRemote.RemoteCalculation do
     [pk] = Ash.Resource.Info.primary_key(resource)
     pk_values = Enum.map(records, &Map.get(&1, pk))
 
-    memo_key = {__MODULE__, resource, :erlang.phash2({pk_values, specs})}
+    memo_key = {__MODULE__, resource, :erlang.phash2({pk_values, specs, context.tenant})}
 
     case Process.get(memo_key) do
       nil ->
         with {:ok, bundle} <-
-               AshRemote.DataLayer.fetch_remote_calculations(resource, pk_values, specs) do
+               AshRemote.DataLayer.fetch_remote_calculations(
+                 resource,
+                 pk_values,
+                 specs,
+                 context.tenant
+               ) do
           Process.put(memo_key, bundle)
           {:ok, Map.get(bundle, name, %{})}
         end

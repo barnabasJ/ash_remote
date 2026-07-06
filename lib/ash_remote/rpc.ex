@@ -49,6 +49,15 @@ defmodule AshRemote.Rpc do
   addressed on the wire by `{resource, action}`, so no per-action RPC name is
   needed.
 
+  **Exposure ⇏ authorization (R-4).** `expose`ing an action makes it reachable
+  by anyone who can reach this server — `Server.run_action`/`validate_action`
+  apply exactly Ash's normal authorization posture, which for a resource with
+  NO authorizers is: everything is allowed. A compile-time verifier warns
+  (never errors — a bare demo/prototype with no authorization is a legitimate
+  choice) when an exposed resource has no authorizers, but it is still on you
+  to add `authorizers: [Ash.Policy.Authorizer]` (or another authorizer) and
+  policies to any resource that shouldn't be a fully open door.
+
   ## Realtime publications
 
   When a resource attaches `AshRemote.Server.Notifier`, its mutation actions are
@@ -110,5 +119,10 @@ defmodule AshRemote.Rpc do
     entities: [@resource]
   }
 
-  use Spark.Dsl.Extension, sections: [@rpc], verifiers: [AshRemote.Rpc.Verifiers.ValidatePublish]
+  use Spark.Dsl.Extension,
+    sections: [@rpc],
+    verifiers: [
+      AshRemote.Rpc.Verifiers.ValidatePublish,
+      AshRemote.Rpc.Verifiers.VerifyExposedResourcesHaveAuthorizers
+    ]
 end

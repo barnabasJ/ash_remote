@@ -21,9 +21,12 @@ defmodule AshRemote.Server do
   since the manifest does not serialize an opaque RPC name.
   """
 
+  require Logger
+
   alias AshRemote.Server.Fields
 
   @doc "The exposed `{resource, action}` entrypoints across an OTP app's `AshRemote.Rpc` domains."
+  @spec entrypoints(atom()) :: [{module(), atom()}]
   def entrypoints(otp_app) do
     otp_app
     |> Ash.Info.domains()
@@ -45,6 +48,7 @@ defmodule AshRemote.Server do
   end
 
   @doc "Generate the exposed surface as a JSON `Ash.Info.Manifest` (exactly the `rpc do` block)."
+  @spec manifest_json(atom()) :: String.t()
   def manifest_json(otp_app) do
     {:ok, spec} =
       Ash.Info.Manifest.generate(otp_app: otp_app, action_entrypoints: entrypoints(otp_app))
@@ -274,8 +278,15 @@ defmodule AshRemote.Server do
   `x-ash-remote-client-id` request header — which is stamped into the mutation
   changeset's context so `AshRemote.Server.Notifier` can echo it back as
   `origin.client_id`.
+
+  Tenant (R-1) is resolved wire-first: `params["tenant"]`, falling back to
+  `opts[:tenant]` (the conn's). The wire tenant is input to Ash multitenancy,
+  not an auth claim — policies must still scope actors to tenants themselves.
   """
+  @spec run_action(atom(), map(), keyword()) :: map()
   def run_action(otp_app, params, opts \\ []) do
+    opts = with_wire_tenant(opts, params)
+
     with {:ok, resource} <- resolve_resource(otp_app, params["resource"]),
          {:ok, action} <- resolve_action(otp_app, resource, params["action"]) do
       %{"success" => true, "data" => dispatch(resource, action, params, opts)}
@@ -285,18 +296,30 @@ defmodule AshRemote.Server do
     error -> %{"success" => false, "errors" => to_errors(error)}
   end
 
-  @doc "Validate an action's input without executing. Returns the response envelope."
-  def validate_action(otp_app, params) do
+  @doc """
+  Validate an action's input without executing. Returns the response envelope.
+
+  `opts` carries `:actor`/`:tenant` (B1-1/B1-4: this arity and the
+  `Server.Router` call site changed together — the validate path previously
+  had neither, since `Ash.Changeset.for_create/3` etc. ran with no subject
+  opts at all). Tenant resolution mirrors `run_action/3` — wire-first,
+  falling back to `opts[:tenant]`.
+  """
+  @spec validate_action(atom(), map(), keyword()) :: map()
+  def validate_action(otp_app, params, opts \\ []) do
+    opts = with_wire_tenant(opts, params)
+
     with {:ok, resource} <- resolve_resource(otp_app, params["resource"]),
          {:ok, action} <- resolve_action(otp_app, resource, params["action"]) do
       input = params["input"] || %{}
+      subject_opts = subject_opts(opts)
 
       subject =
         case action.type do
-          :read -> Ash.Query.for_read(resource, action.name, input)
-          :create -> Ash.Changeset.for_create(resource, action.name, input)
-          :update -> resource |> struct() |> Ash.Changeset.for_update(action.name, input)
-          :destroy -> resource |> struct() |> Ash.Changeset.for_destroy(action.name, input)
+          :read -> Ash.Query.for_read(resource, action.name, input, subject_opts)
+          :create -> Ash.Changeset.for_create(resource, action.name, input, subject_opts)
+          :update -> resource |> struct() |> Ash.Changeset.for_update(action.name, input, subject_opts)
+          :destroy -> resource |> struct() |> Ash.Changeset.for_destroy(action.name, input, subject_opts)
         end
 
       errors = if valid?(subject), do: [], else: to_errors(errors_of(subject))
@@ -305,6 +328,13 @@ defmodule AshRemote.Server do
     |> normalize()
   rescue
     error -> %{"success" => false, "errors" => to_errors(error)}
+  end
+
+  defp with_wire_tenant(opts, params) do
+    case params["tenant"] do
+      nil -> opts
+      tenant -> Keyword.put(opts, :tenant, tenant)
+    end
   end
 
   # --- dispatch ------------------------------------------------------------
@@ -432,11 +462,10 @@ defmodule AshRemote.Server do
   defp resolve_resource(_otp_app, nil), do: {:error, :missing_resource}
 
   defp resolve_resource(otp_app, module_string) when is_binary(module_string) do
-    module = Module.concat([module_string])
-
-    if module in resources(otp_app),
-      do: {:ok, module},
-      else: {:error, {:unknown_resource, module_string}}
+    case AshRemote.Server.ResourceResolver.resolve(otp_app, :rpc, resources(otp_app), module_string) do
+      {:ok, module} -> {:ok, module}
+      :error -> {:error, {:unknown_resource, module_string}}
+    end
   end
 
   defp resolve_action(otp_app, resource, name) when is_binary(name) do
@@ -509,9 +538,40 @@ defmodule AshRemote.Server do
   defp path(%{field: field}) when not is_nil(field), do: [field]
   defp path(_), do: []
 
-  defp safe_message(error) do
+  # R-5: mirrors the fallback branch every Ash error-rendering library
+  # (ash_json_api's `AshJsonApi.Error.to_json_api_errors/4`, ash_graphql's
+  # equivalent) uses — key off Splode's `class` field, not the module or a
+  # hand-maintained allowlist. `:invalid`/`:forbidden` messages are Ash's OWN
+  # construction, meant to be shown to a caller (this covers
+  # `Ash.Error.Invalid`, `Ash.Error.Forbidden`, and every `:invalid`-class
+  # NotFound variant — `Ash.Error.Query.NotFound` included — for free, since
+  # they all declare `class: :invalid` via `use Splode.Error`). Every other
+  # class — critically `:unknown` and `:framework`, which is what a
+  # non-Ash exception like a raised `FunctionClauseError` becomes after
+  # `Ash.Error.to_error_class/1` wraps it in `Ash.Error.Unknown.UnknownError`
+  # — carries `Exception.message/1` output that echoes the ORIGINAL raw
+  # exception right back (`UnknownError.message/1` is `inspect(error)`), so
+  # blindly trusting it leaks exactly what this fix closes. Log the real
+  # exception server-side (with a correlation id) and return a generic
+  # message instead.
+  @safe_classes [:invalid, :forbidden]
+
+  defp safe_message(%{class: class} = error) when class in @safe_classes do
     Exception.message(error)
   rescue
-    _ -> inspect(error)
+    _ -> generic_message(error)
+  end
+
+  defp safe_message(error), do: generic_message(error)
+
+  defp generic_message(error) do
+    id = Ash.UUID.generate()
+
+    Logger.error(
+      "ash_remote: internal error `#{id}` during RPC dispatch: " <>
+        Exception.format_banner(:error, error)
+    )
+
+    "internal error (id: #{id})"
   end
 end

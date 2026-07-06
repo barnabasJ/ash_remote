@@ -21,6 +21,10 @@ defmodule AshRemote.Server.Router do
   extension (`rpc do resource … expose :action end end`) — the same set the published
   manifest describes. `Plug` is referenced only inside the macro expansion, so only the
   backend using this router needs `plug` — `ash_remote` clients do not.
+
+  **Exposure is not authorization (R-4)**: this router runs every exposed
+  action with Ash's normal authorization posture, which for a resource with no
+  authorizers means unauthenticated access. See `AshRemote.Rpc`'s moduledoc.
   """
 
   defmacro __using__(opts) do
@@ -49,7 +53,11 @@ defmodule AshRemote.Server.Router do
       post "/rpc/validate" do
         ash_remote_send_json(
           var!(conn),
-          AshRemote.Server.validate_action(@ash_remote_otp_app, var!(conn).params)
+          AshRemote.Server.validate_action(
+            @ash_remote_otp_app,
+            var!(conn).params,
+            ash_remote_request_opts(var!(conn))
+          )
         )
       end
 

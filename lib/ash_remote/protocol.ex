@@ -16,7 +16,8 @@ defmodule AshRemote.Protocol do
           optional(:filter) => map(),
           optional(:sort) => String.t(),
           optional(:page) => map(),
-          optional(:primary_key) => map()
+          optional(:primary_key) => map(),
+          optional(:tenant) => String.t() | atom()
         }
 
   @doc "Build the JSON body for `/rpc/run`."
@@ -36,10 +37,19 @@ defmodule AshRemote.Protocol do
       "filter" => Map.get(req, :filter),
       "sort" => Map.get(req, :sort),
       "page" => Map.get(req, :page),
-      "primary_key" => Map.get(req, :primary_key)
+      "primary_key" => Map.get(req, :primary_key),
+      # R-1: input to Ash multitenancy, never an auth claim — the server must
+      # still scope actors to tenants itself (policies), it just no longer
+      # has to invent a tenant from thin air. Absent key = old wire shape
+      # (backward compatible).
+      "tenant" => req |> Map.get(:tenant) |> tenant_string()
     }
     |> reject_nils()
   end
+
+  defp tenant_string(nil), do: nil
+  defp tenant_string(tenant) when is_binary(tenant), do: tenant
+  defp tenant_string(tenant), do: to_string(tenant)
 
   @doc """
   Parse a `/rpc/run` response.
