@@ -139,10 +139,16 @@ defmodule AshRemote.DataLayer do
   def destroy(resource, changeset) do
     cfg = remote_config(resource)
 
+    # `AshMultiDatalayer.Backfill.destroy_record/4` (the LocalOutbox flush path)
+    # hands us an action-less changeset — `data` carries the row, but there is no
+    # `action` — mirroring the `upsert/3` case. Resolve the primary destroy action
+    # rather than dereferencing `changeset.action.name` on `nil`.
+    action = changeset.action || Ash.Resource.Info.primary_action!(resource, :destroy)
+
     body =
       Protocol.build_run(%{
         resource: cfg.source,
-        action: map_action(changeset.action.name, cfg),
+        action: map_action(action.name, cfg),
         primary_key: primary_key(changeset)
       })
 

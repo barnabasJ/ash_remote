@@ -103,6 +103,25 @@ defmodule AshRemote.DataLayerTest do
     assert [] == Todo |> Ash.Query.filter(id == ^todo.id) |> Ash.read!()
   end
 
+  # Regression: the LocalOutbox flush destroys through
+  # `AshMultiDatalayer.Backfill.destroy_record/4`, which hands the data layer an
+  # ACTION-LESS changeset (`data` carries the row, `action` is nil) — the same
+  # shape `upsert/3` already tolerates. `destroy/2` used to deref
+  # `changeset.action.name` and crash with BadMapError, so every offline destroy
+  # stayed pending forever. It must resolve the primary destroy action instead.
+  test "destroy tolerates an action-less changeset (the LocalOutbox flush shape)" do
+    %{todo: todo} = seed()
+
+    changeset =
+      Todo
+      |> Ash.Changeset.new()
+      |> Map.merge(%{data: todo, domain: Ash.Resource.Info.domain(Todo)})
+
+    assert nil == changeset.action
+    assert :ok = AshRemote.DataLayer.destroy(Todo, changeset)
+    assert [] == Todo |> Ash.Query.filter(id == ^todo.id) |> Ash.read!()
+  end
+
   test "get by primary key (read + pk filter)" do
     %{todo: todo} = seed()
     assert %Todo{id: id} = Ash.get!(Todo, todo.id)
