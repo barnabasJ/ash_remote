@@ -4,6 +4,7 @@ defmodule AshRemote.RealtimeClient.Domain do
 
   resources do
     resource(AshRemote.RealtimeClient.Todo)
+    resource(AshRemote.RealtimeClient.SecondTodo)
     resource(AshRemote.RealtimeClient.PubSubTodo)
     resource(AshRemote.RealtimeClient.Document)
   end

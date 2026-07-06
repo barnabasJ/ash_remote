@@ -27,10 +27,26 @@ defmodule AshRemote.Realtime.Inbound do
   Returns `:ok` (skips silently on unmappable payloads, logging at debug level).
   """
   def replicate(%{"resource" => source} = payload, config) do
-    with {:ok, %{resource: resource, action_invert: invert}} <- fetch_source(config, source),
-         :ok <- check_echo(payload, config),
-         {:ok, action} <- resolve_action(resource, payload["action"], invert) do
-      notify(resource, action, payload)
+    with {:ok, entries} <- fetch_source(config, source),
+         :ok <- check_echo(payload, config) do
+      # One source can back several client resources (e.g. a cache mirror AND a
+      # local-first mirror of the same backend resource). Replicate to EACH, so
+      # every resource's notifiers fire — action resolution is per-resource
+      # (their action maps may differ), and one resource skipping (no matching
+      # local action) must not suppress the others.
+      Enum.each(entries, fn %{resource: resource, action_invert: invert} ->
+        case resolve_action(resource, payload["action"], invert) do
+          {:ok, action} ->
+            notify(resource, action, payload)
+
+          {:skip, reason} ->
+            Logger.debug(fn ->
+              "ash_remote: skipped replication (#{reason}) for #{inspect(resource)}"
+            end)
+        end
+      end)
+
+      :ok
     else
       {:skip, reason} ->
         Logger.debug(fn ->
@@ -46,7 +62,8 @@ defmodule AshRemote.Realtime.Inbound do
   defp fetch_source(config, source) do
     case Map.get(config.sources, source) do
       nil -> {:skip, "no client resource for source"}
-      entry -> {:ok, entry}
+      [] -> {:skip, "no client resource for source"}
+      entries -> {:ok, entries}
     end
   end
 

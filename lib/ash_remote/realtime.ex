@@ -124,17 +124,27 @@ defmodule AshRemote.Realtime do
     socket_base = Keyword.get(opts, :base_url) || http_base_url
     socket_path = Keyword.get(opts, :socket_path, @default_socket_path)
 
+    # Several client resources may map to the SAME server source (e.g. a
+    # ProvenCoverage cache mirror and a LocalOutbox local-first mirror of one
+    # backend resource, living in one app). They share a topic, but each has its
+    # own notifiers and must react independently — so `sources`/`topic_meta`
+    # group ALL resources per source/topic rather than collapsing to one (which
+    # would silently drop every reaction but the last resource's).
     topics =
       Map.new(configs, fn cfg -> {cfg.source, Topics.topic(cfg.source, tenant)} end)
 
     topic_meta =
-      Map.new(configs, fn cfg ->
-        {topics[cfg.source], %{resource: cfg.resource, tenant: tenant}}
+      configs
+      |> Enum.group_by(fn cfg -> topics[cfg.source] end)
+      |> Map.new(fn {topic, cfgs} ->
+        {topic, %{resources: Enum.map(cfgs, & &1.resource), tenant: tenant}}
       end)
 
     sources =
-      Map.new(configs, fn cfg ->
-        {cfg.source, %{resource: cfg.resource, action_invert: cfg.action_invert}}
+      configs
+      |> Enum.group_by(& &1.source)
+      |> Map.new(fn {source, cfgs} ->
+        {source, Enum.map(cfgs, &%{resource: &1.resource, action_invert: &1.action_invert})}
       end)
 
     conn_opts = %{

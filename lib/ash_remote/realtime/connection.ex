@@ -122,17 +122,25 @@ if Code.ensure_loaded?(Slipstream) do
     defp emit(socket, type, topic) do
       opts = socket.assigns.opts
       meta = if topic, do: Map.get(opts.topic_meta, topic, %{}), else: %{}
+      tenant = Map.get(meta, :tenant)
 
-      event = %Event{
-        type: type,
-        resource: Map.get(meta, :resource),
-        tenant: Map.get(meta, :tenant),
-        base_url: opts.http_base_url,
-        topic: topic
-      }
+      # A topic can carry several client resources (multiple mirrors of one
+      # server source); a gap event must reach every one so each strategy
+      # reconciles. Connection-wide events (topic == nil) carry no resource.
+      resources = Map.get(meta, :resources, [nil])
 
-      Registry.dispatch(opts.registry, :lifecycle, fn entries ->
-        for {pid, _} <- entries, do: send(pid, {AshRemote.Realtime, event})
+      Enum.each(resources, fn resource ->
+        event = %Event{
+          type: type,
+          resource: resource,
+          tenant: tenant,
+          base_url: opts.http_base_url,
+          topic: topic
+        }
+
+        Registry.dispatch(opts.registry, :lifecycle, fn entries ->
+          for {pid, _} <- entries, do: send(pid, {AshRemote.Realtime, event})
+        end)
       end)
 
       :ok
