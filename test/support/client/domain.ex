@@ -6,5 +6,7 @@ defmodule AshRemote.Client.Domain do
     resource(AshRemote.Client.User)
     resource(AshRemote.Client.Todo)
     resource(AshRemote.Client.Comment)
+    resource(AshRemote.Client.Note)
+    resource(AshRemote.Client.RaceItem)
   end
 end
