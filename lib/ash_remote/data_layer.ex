@@ -32,6 +32,13 @@ defmodule AshRemote.DataLayer do
     resource |> Ash.Resource.Info.primary_key() |> Enum.any?()
   end
 
+  # Insert-or-update by primary key. The backend exposes no upsert action, so it
+  # is resolved against the live remote row (see `upsert/3`) — enough to make this
+  # a valid asynchronous replication target for ash_multi_datalayer's LocalOutbox.
+  def can?(resource, :upsert) do
+    resource |> Ash.Resource.Info.primary_key() |> Enum.any?()
+  end
+
   def can?(_resource, :filter), do: true
   def can?(_resource, :boolean_filter), do: true
   def can?(_resource, {:filter_expr, _}), do: true
@@ -145,6 +152,64 @@ defmodule AshRemote.DataLayer do
     else
       {:error, errors} when is_list(errors) -> {:error, AshRemote.Error.to_ash_error(errors)}
       {:error, other} -> {:error, other}
+    end
+  end
+
+  @impl true
+  # PK-upsert for replication (ash_multi_datalayer LocalOutbox). The remote has
+  # no upsert action, so resolve it: read the row by primary key and dispatch to
+  # this layer's own `update` (present) or `create` (absent). Idempotent under
+  # flush retries — a re-flushed create finds its row and updates instead of
+  # colliding. `keys` (the upsert identity) is the primary key here.
+  #
+  # Backfill hands us an action-less changeset (attributes force-changed, `data`
+  # empty), so set the resource's primary write action and, for the update path,
+  # lift the primary key into `data` (where `update/2` addresses the row).
+  def upsert(resource, changeset, _keys) do
+    case remote_pk_row(resource, changeset) do
+      {:ok, nil} -> create(resource, put_write_action(resource, changeset, :create))
+      {:ok, _row} -> update(resource, put_write_action(resource, changeset, :update))
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp put_write_action(resource, changeset, :create) do
+    %{
+      changeset
+      | action: changeset.action || Ash.Resource.Info.primary_action!(resource, :create)
+    }
+  end
+
+  defp put_write_action(resource, changeset, :update) do
+    data =
+      Enum.reduce(Ash.Resource.Info.primary_key(resource), changeset.data, fn key, acc ->
+        Map.put(acc, key, Ash.Changeset.get_attribute(changeset, key))
+      end)
+
+    %{
+      changeset
+      | action: Ash.Resource.Info.primary_action!(resource, :update),
+        data: data
+    }
+  end
+
+  defp remote_pk_row(resource, changeset) do
+    filter_map =
+      Map.new(Ash.Resource.Info.primary_key(resource), fn key ->
+        {key, Ash.Changeset.get_attribute(changeset, key)}
+      end)
+
+    query = %Query{
+      resource: resource,
+      domain: changeset.domain || Ash.Resource.Info.domain(resource),
+      filter: Ash.Filter.parse!(resource, filter_map),
+      context: changeset.context || %{}
+    }
+
+    case run_query(query, resource) do
+      {:ok, [row | _]} -> {:ok, row}
+      {:ok, []} -> {:ok, nil}
+      {:error, error} -> {:error, error}
     end
   end
 
