@@ -30,6 +30,11 @@ defmodule AshRemote.MixProject do
       {:jason, "~> 1.4"},
       # A SAT solver Ash needs at runtime (ash lists these as optional).
       {:simple_sat, "~> 0.1"},
+      # Optional integration: the `AshRemote.MultiDatalayer.*` utilities compose an
+      # ash_remote client with ash_multi_datalayer's local authority. Optional so
+      # downstream apps that don't layer a local cache/store skip it entirely; the
+      # utilities runtime-check MDL and raise clearly if invoked without it.
+      {:ash_multi_datalayer, path: "../ash_multi_datalayer", optional: true},
       # Realtime transports — optional so downstream apps pull only their side
       # (server: phoenix + phoenix_pubsub; client: slipstream). Fetched here for
       # the library's own test suite (server socket/channel + client subscriber).

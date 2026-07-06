@@ -2,10 +2,10 @@ defmodule TodoClient.Session do
   @moduledoc """
   Authenticates this client instance against todo_server at boot (email/password
   → JWT) and holds the token. Run two instances as different users
-  (`TODO_EMAIL=grace@example.com WEB_PORT=4002 mix phx.server`) to see per-user
-  filtering; both still see PUBLIC todos live.
+  (`TODO_EMAIL=grace@example.com WEB_PORT=4002 mix run --no-halt`) to see
+  per-user filtering; both still see PUBLIC todos live.
 
-  The token is forwarded on every RPC call (`context/0`) and on the realtime
+  The token is forwarded on every RPC call (`actor/0`) and on the realtime
   socket connect (`connect_params/0`), so the whole instance acts as one user.
   """
   use Agent
@@ -28,6 +28,24 @@ defmodule TodoClient.Session do
   propagates to relationship loads, unlike a bare context).
   """
   def actor, do: Agent.get(__MODULE__, & &1[:actor])
+
+  @doc """
+  Action context carrying this instance's JWT as an explicit Bearer header — the
+  provider configured as `config :ash_multi_datalayer, :remote_context`. A
+  background outbox flush runs in an Oban worker with no request actor, so
+  `AshMultiDatalayer.RemoteContext` calls this to authenticate the push/read to
+  the server as this instance's signed-in user. Read fresh each call, so a
+  re-sign-in's new token is picked up. Empty until sign-in completes.
+  """
+  def remote_context do
+    case token() do
+      token when is_binary(token) and token != "" ->
+        %{ash_remote: %{headers: %{"authorization" => "Bearer " <> token}}}
+
+      _ ->
+        %{}
+    end
+  end
 
   defp sign_in do
     base = Application.fetch_env!(:ash_remote, :base_url)

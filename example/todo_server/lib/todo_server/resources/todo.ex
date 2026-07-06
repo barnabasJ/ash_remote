@@ -29,7 +29,17 @@ defmodule TodoServer.Todo do
   end
 
   attributes do
-    uuid_primary_key(:id)
+    # Writable primary key: an offline-first LocalOutbox client generates the id
+    # locally and replicates it, so the same row shares one id on both sides.
+    # Optional on create (a normal online client omits it → default generates).
+    attribute :id, :uuid do
+      primary_key?(true)
+      allow_nil?(false)
+      writable?(true)
+      default(&Ash.UUID.generate/0)
+      public?(true)
+    end
+
     attribute(:title, :string, public?: true, allow_nil?: false)
     attribute(:completed, :boolean, public?: true, default: false, allow_nil?: false)
     # Public todos are visible to (and replicated to) every user; private ones
@@ -38,6 +48,9 @@ defmodule TodoServer.Todo do
     attribute(:priority, TodoServer.Priority, public?: true, default: :medium)
     attribute(:due_date, :date, public?: true)
     create_timestamp(:inserted_at, public?: true)
+    # Monotonic on every update — the field a LocalOutbox client stale-checks
+    # against to detect that another client changed the row out from under it.
+    update_timestamp(:updated_at, public?: true)
   end
 
   relationships do
@@ -64,7 +77,7 @@ defmodule TodoServer.Todo do
   end
 
   actions do
-    default_accept([:title, :completed, :public, :priority, :due_date, :list_id, :parent_id])
+    default_accept([:id, :title, :completed, :public, :priority, :due_date, :list_id, :parent_id])
 
     read :read do
       primary?(true)

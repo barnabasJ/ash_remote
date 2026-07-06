@@ -6,6 +6,7 @@ defmodule TodoClient.MixProject do
       app: :todo_client,
       version: "0.1.0",
       elixir: "~> 1.18",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps()
@@ -28,12 +29,26 @@ defmodule TodoClient.MixProject do
     ]
   end
 
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
   defp deps do
     [
       {:ash, "~> 3.29"},
       {:ash_phoenix, "~> 2.3"},
       {:ash_remote, path: "../.."},
+      {:ash_multi_datalayer, path: "../../../ash_multi_datalayer"},
       {:simple_sat, "~> 0.1"},
+
+      # LocalOutbox offline stack: a local SQLite authority (ash_sqlite/
+      # ecto_sqlite3) fronting the remote, with an Oban-drained outbox. Pinned to
+      # match ash_multi_datalayer's own optional-dep locks.
+      {:oban, "2.23.0"},
+      {:ash_oban, "0.8.10"},
+      # The Oban dashboard — watch the outbox flush jobs drain at /oban.
+      {:oban_web, "~> 2.11"},
+      {:ash_sqlite, "0.2.17"},
+      {:ecto_sqlite3, "0.24.1"},
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},
       # The realtime client transport (server→client push).

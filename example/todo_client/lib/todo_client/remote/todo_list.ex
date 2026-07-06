@@ -1,9 +1,25 @@
 defmodule TodoClient.Remote.TodoList do
+  # Hand-edited after `mix ash_remote.gen` — re-apply after any regen (see the
+  # client README). Same three edits as `TodoClient.Remote.Todo`, plus
+  # `fold_aggregate_overrides([:completed_count])`: `todo_count` is folded
+  # from the cached todos (0 RPC when covered), while `completed_count` is
+  # opted out — forwarded to the server by name (1 RPC) — the two aggregate
+  # strategies side by side in the demo UI.
   use Ash.Resource,
     domain: TodoClient.Remote.Domain,
-    data_layer: AshRemote.DataLayer,
+    data_layer: AshMultiDatalayer.DataLayer,
     extensions: [AshRemote.Resource],
-    notifiers: [TodoClient.RealtimeBridge]
+    notifiers: [AshRemote.MultiDatalayer.ChangeNotifier, TodoClient.RealtimeBridge]
+
+  multi_data_layer do
+    layer(:cache, Ash.DataLayer.Ets)
+    layer(:remote, AshRemote.DataLayer)
+
+    read_order([:cache, :remote])
+    write_order([:remote, :cache])
+
+    fold_aggregate_overrides([:completed_count])
+  end
 
   remote do
     source("TodoServer.TodoList")
@@ -27,6 +43,11 @@ defmodule TodoClient.Remote.TodoList do
   end
 
   aggregates do
+    count :completed_count, :todos do
+      public?(true)
+      filter(expr(completed))
+    end
+
     count :todo_count, :todos do
       public?(true)
     end

@@ -14,4 +14,8 @@
 
 {:ok, _} = AshRemote.Backend.Endpoint.start_link()
 
+# The optional ash_multi_datalayer integration (AshRemote.MultiDatalayer.*
+# utilities) needs MDL's supervisor for its coverage-ledger tables.
+{:ok, _} = AshMultiDatalayer.Supervisor.start_link()
+
 ExUnit.start()

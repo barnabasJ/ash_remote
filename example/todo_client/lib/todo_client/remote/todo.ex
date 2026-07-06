@@ -1,9 +1,24 @@
 defmodule TodoClient.Remote.Todo do
+  # Hand-edited after `mix ash_remote.gen` — re-apply after any regen (see the
+  # client README): swapped `data_layer:` for `AshMultiDatalayer.DataLayer`
+  # (+ the `multi_data_layer` block below) to front the remote data layer with
+  # an ETS cache, and added AshRemote.MultiDatalayer.ChangeNotifier (FIRST in the
+  # list — see its moduledoc for why, and why this must be a literal list
+  # rather than built via a helper call) so a realtime notification
+  # invalidates this client's cache before the UI refetches.
   use Ash.Resource,
     domain: TodoClient.Remote.Domain,
-    data_layer: AshRemote.DataLayer,
+    data_layer: AshMultiDatalayer.DataLayer,
     extensions: [AshRemote.Resource],
-    notifiers: [TodoClient.RealtimeBridge]
+    notifiers: [AshRemote.MultiDatalayer.ChangeNotifier, TodoClient.RealtimeBridge]
+
+  multi_data_layer do
+    layer(:cache, Ash.DataLayer.Ets)
+    layer(:remote, AshRemote.DataLayer)
+
+    read_order([:cache, :remote])
+    write_order([:remote, :cache])
+  end
 
   remote do
     source("TodoServer.Todo")

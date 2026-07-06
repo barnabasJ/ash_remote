@@ -58,6 +58,16 @@ defmodule TodoServer.TodoList do
   end
 
   aggregates do
-    count(:todo_count, :todos, public?: true)
+    count :todo_count, :todos do
+      public? true
+    end
+
+    # Opted out of same-repo folding on the client (`fold_aggregate_overrides`)
+    # so it's always forwarded to the server — the deliberate counterpart to
+    # `todo_count`, which the client folds locally from cached todos.
+    count :completed_count, :todos do
+      public? true
+      filter expr(completed)
+    end
   end
 end

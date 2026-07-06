@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Launch the whole demo: the todo_server backend, then TWO LiveView clients
-# signed in as different users — so the realtime + per-user filtering story is
-# visible end to end.
+# signed in as different users — so both the realtime cross-client sync AND
+# the ash_multi_datalayer cache metrics are visible end to end.
 #
 #   Ada   → http://localhost:4001  (ada@example.com)
 #   Grace → http://localhost:4002  (grace@example.com)
 #
-# Open both. Each sees only their own private todos, but a PUBLIC todo created in
-# either page appears live in both. Ctrl-C stops everything.
+# Open both. Each sees only their own private todos, but a PUBLIC todo created
+# in either page appears live in both — and only the affected coverage entry
+# on the OTHER page takes a cache miss, visible on its sticky stats bar.
+# Ctrl-C stops everything.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -16,11 +18,6 @@ ADA_PORT="${ADA_PORT:-4001}"
 GRACE_PORT="${GRACE_PORT:-4002}"
 export TODO_SERVER_URL="http://127.0.0.1:${SERVER_PORT}"
 
-# Compile up front (the first run compiles ash and friends — can take a minute).
-# Doing it here, in the foreground, means the health check below isn't racing
-# a multi-minute compile. Only hit the Hex registry when deps are actually
-# missing/out of sync — the network here is unreliable, and an already-fetched
-# demo shouldn't die on a registry timeout.
 echo "▶ fetching + compiling deps (first run can take a minute)…"
 for app in todo_server todo_client; do
   ( cd "$app" && mix deps.loadpaths --no-compile >/dev/null 2>&1 || mix deps.get >/dev/null )
@@ -60,8 +57,9 @@ echo
 echo "  Ada   → http://localhost:${ADA_PORT}"
 echo "  Grace → http://localhost:${GRACE_PORT}   (starting in the foreground; Ctrl-C to stop all)"
 echo
-echo "  Try: add a PUBLIC todo in one page → it appears live in the other."
-echo "       add a private todo → only its owner sees it."
+echo "  Try: warm a Browse filter on one page (misses+backfills, then hits on repeat)."
+echo "       change a todo the other user can see → watch only the affected filter"
+echo "       take a miss on their sticky cache bar, everything else stays a hit."
 echo
 
 # Grace's client runs in the foreground so Ctrl-C tears the whole demo down.

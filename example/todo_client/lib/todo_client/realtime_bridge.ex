@@ -5,6 +5,12 @@ defmodule TodoClient.RealtimeBridge do
   this bridge forwards it to LiveViews over `TodoClient.PubSub` so they refetch.
   Because the server already filtered per-record, a change only arrives here if
   the connected user was allowed to see it.
+
+  Listed after `AshRemote.MultiDatalayer.ChangeNotifier` (see that module and
+  `AshRemote.MultiDatalayer` for the ordering rule) so the coverage ledger is
+  already invalidated by the time this bridge tells a LiveView to refetch — the
+  refetch is a genuine (and, for the affected rows, singular) miss, never a stale
+  cache hit.
   """
   use Ash.Notifier
 

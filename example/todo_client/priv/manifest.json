@@ -2859,6 +2859,75 @@
     {
       "embedded": false,
       "fields": {
+        "completed_count": {
+          "aggregate_filter": "completed",
+          "aggregate_kind": "count",
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": false,
+          "kind": "aggregate",
+          "primary_key": false,
+          "relationship": "todos",
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "integer",
+            "module": "Ash.Type.Integer",
+            "name": "Integer"
+          },
+          "writable": false
+        },
         "id": {
           "allow_nil": false,
           "filter_custom_expressions": [],
