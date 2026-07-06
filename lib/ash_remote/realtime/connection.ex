@@ -26,10 +26,14 @@ if Code.ensure_loaded?(Slipstream) do
       client_id = ClientId.register(opts.http_base_url)
       inbound = Map.put(opts.inbound, :client_id, client_id)
 
-      # connect_params (e.g. an auth token) are evaluated per connect and go on
-      # BOTH the socket connect query string — where the server's `connect/3`
-      # reads them to authenticate the connection (the ash_authentication hook) —
-      # and the channel join payload.
+      # connect_params (e.g. an auth token) are evaluated ONCE here, in init/1
+      # — NOT per connect/reconnect (R-9 correction: the previous comment was
+      # misleading). The evaluated map goes on BOTH the socket connect query
+      # string — where the server's `connect/3` reads it to authenticate the
+      # connection (the ash_authentication hook) — and every channel join
+      # payload for the lifetime of THIS socket process; a fresh token only
+      # arrives via a new process (e.g. a supervisor restart), whose state
+      # (including `:denied`, below) starts empty anyway.
       params = eval(opts.connect_params)
 
       socket =
@@ -38,6 +42,7 @@ if Code.ensure_loaded?(Slipstream) do
         |> assign(:inbound, inbound)
         |> assign(:join_params, params)
         |> assign(:joined, MapSet.new())
+        |> assign(:denied, MapSet.new())
         |> assign(:ready?, false)
 
       case connect(socket,
@@ -52,8 +57,15 @@ if Code.ensure_loaded?(Slipstream) do
 
     @impl Slipstream
     def handle_connect(socket) do
+      # R-9: a durably-denied topic (server refused the join with a terminal
+      # reason) must never be retried — attempting it again every reconnect
+      # would drive a `:join_denied` → LifecycleGuard reconcile storm forever
+      # for a decision that will not change within this socket process (see
+      # the `:denied` state note in init/1).
+      topics = socket.assigns.opts.topics -- MapSet.to_list(socket.assigns.denied)
+
       socket =
-        Enum.reduce(socket.assigns.opts.topics, socket, fn topic, socket ->
+        Enum.reduce(topics, socket, fn topic, socket ->
           join(socket, topic, socket.assigns.join_params)
         end)
 
@@ -93,10 +105,19 @@ if Code.ensure_loaded?(Slipstream) do
 
     @impl Slipstream
     def handle_topic_close(topic, {:failed_to_join, response}, socket) do
-      # Server refused the join (authorization / tenant). Do not retry in a tight
-      # loop — surface it and stop.
-      Logger.warning("ash_remote: join denied for #{topic}: #{inspect(response)}")
-      emit(socket, :join_denied, topic)
+      # Server refused the join (authorization / tenant) — a terminal
+      # decision for this socket process (see the `:denied` state note in
+      # init/1). Do not retry in a tight loop — track it so `handle_connect/1`
+      # excludes it from every future rejoin attempt, and surface the event
+      # exactly ONCE (R-9) rather than once per reconnect.
+      already_denied? = MapSet.member?(socket.assigns.denied, topic)
+      socket = assign(socket, :denied, MapSet.put(socket.assigns.denied, topic))
+
+      unless already_denied? do
+        Logger.warning("ash_remote: join denied for #{topic}: #{inspect(response)}")
+        emit(socket, :join_denied, topic)
+      end
+
       {:ok, socket}
     end
 

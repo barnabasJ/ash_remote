@@ -38,6 +38,15 @@ defmodule AshRemote.Error do
       t when t in ["invalid", "invalid_attribute", "invalid_argument"] ->
         Ash.Error.Changes.InvalidAttribute.exception(field: field || :base, message: message)
 
+      "invalid_changes" ->
+        # R-7: the wire type an identity/uniqueness pre-check violation
+        # produces server-side (`error_type/1`'s `Macro.underscore/1` of
+        # `Ash.Error.Changes.InvalidChanges`) — round-tripping it as a
+        # `:invalid`-class error (not the `:unknown` catch-all) is what lets
+        # `AshRemote.DataLayer.upsert/3` recognize a create-collision and
+        # retry as an update instead of surfacing the raw collision.
+        Ash.Error.Changes.InvalidChanges.exception(fields: path, message: message)
+
       _ ->
         Ash.Error.Unknown.UnknownError.exception(error: message, field: field)
     end
