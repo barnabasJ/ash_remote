@@ -7,11 +7,15 @@ defmodule TodoClient.Local.Todo do
   parks a flush whose server row moved since this client last saw it — surfaced in
   `TodoClient.OfflineLive` for three-way resolution.
 
-  `updated_at` is a **plain attribute** (not an `update_timestamp`): it carries the
-  server-assigned value through hydration and into each write's `base_image`, so
-  the stale-check compares the client's last-known server timestamp against the
-  server's current one. `hydrate: :manual` — the app hydrates after sign-in
-  (`TodoClient.Application`) so it can carry the actor's token.
+  Conflict detection stale-checks a **client-authored `version`** (see
+  `TodoClient.BumpVersion`), not a timestamp. A server-assigned `updated_at` is
+  unpredictable to the client — a freshly-created local row has no server
+  timestamp yet — so `base_image.updated_at` could never match the server's, and
+  every offline update/destroy would false-park as a conflict. The client owns
+  `version`, so it predicts its own chain and only a real peer write trips a
+  conflict. `updated_at` remains a plain display attribute. `hydrate: :manual` —
+  the app hydrates after sign-in (`TodoClient.Application`) so it can carry the
+  actor's token.
   """
   use Ash.Resource,
     domain: TodoClient.Local,
@@ -31,7 +35,7 @@ defmodule TodoClient.Local.Todo do
     orchestrator(
       {AshMultiDatalayer.Orchestrator.LocalOutbox,
        outbox_resource: TodoClient.Sync.OutboxEntry,
-       conflict_detection: {:stale_check, :updated_at},
+       conflict_detection: {:stale_check, :version},
        hydrate: :manual}
     )
 
@@ -73,9 +77,13 @@ defmodule TodoClient.Local.Todo do
     attribute(:priority, TodoClient.Remote.Priority, public?: true, default: :medium)
     attribute(:due_date, :date, public?: true)
     attribute(:inserted_at, :utc_datetime_usec, public?: true)
-    # The stale-check field — a plain attribute holding the server's value, never
-    # auto-bumped locally (see the moduledoc).
+    # Plain display attribute holding the server's value (carried by hydration);
+    # no longer the conflict field (see the moduledoc).
     attribute(:updated_at, :utc_datetime_usec, public?: true)
+    # The conflict field — a client-authored monotonic counter (see
+    # `TodoClient.BumpVersion`). Carried on the wire so the flush pushes it and
+    # the server stores it verbatim.
+    attribute(:version, :integer, public?: true, default: 1, allow_nil?: false)
   end
 
   actions do
@@ -84,12 +92,14 @@ defmodule TodoClient.Local.Todo do
     create :create do
       primary?(true)
       accept([:id, :title, :completed, :public, :priority, :due_date])
+      change(TodoClient.BumpVersion)
     end
 
     update :update do
       primary?(true)
       require_atomic?(false)
       accept([:title, :completed, :public, :priority, :due_date])
+      change(TodoClient.BumpVersion)
     end
   end
 end

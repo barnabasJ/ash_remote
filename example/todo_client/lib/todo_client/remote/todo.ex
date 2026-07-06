@@ -34,6 +34,11 @@ defmodule TodoClient.Remote.Todo do
     attribute(:priority, TodoClient.Remote.Priority, public?: true)
     attribute(:public, :boolean, public?: true)
     attribute(:title, :string, public?: true, allow_nil?: false)
+    # Client-authored conflict counter (see TodoClient.BumpVersion). The server
+    # exposes it publicly, so this cache mirror carries it too — both to decode
+    # server rows cleanly and to advance it on cache-side (`/`) edits, keeping the
+    # version monotonic no matter which strategy wrote the row.
+    attribute(:version, :integer, public?: true, default: 1)
   end
 
   relationships do
@@ -74,6 +79,7 @@ defmodule TodoClient.Remote.Todo do
     create :create do
       primary?(true)
       accept([:title, :completed, :public, :priority, :due_date, :list_id, :parent_id])
+      change(TodoClient.BumpVersion)
     end
 
     destroy :destroy do
@@ -90,6 +96,7 @@ defmodule TodoClient.Remote.Todo do
       primary?(true)
       require_atomic?(false)
       accept([:title, :completed, :public, :priority, :due_date, :list_id, :parent_id])
+      change(TodoClient.BumpVersion)
     end
   end
 end

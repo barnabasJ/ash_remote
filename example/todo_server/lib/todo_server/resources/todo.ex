@@ -48,9 +48,19 @@ defmodule TodoServer.Todo do
     attribute(:priority, TodoServer.Priority, public?: true, default: :medium)
     attribute(:due_date, :date, public?: true)
     create_timestamp(:inserted_at, public?: true)
-    # Monotonic on every update — the field a LocalOutbox client stale-checks
-    # against to detect that another client changed the row out from under it.
+    # Still auto-stamped for display, but NO LONGER the conflict field — a
+    # server-assigned timestamp is unpredictable to a client, so it can never
+    # pre-fill a matching stale-check base image (a fresh local row has no
+    # server timestamp yet) and every offline update/destroy would false-park.
     update_timestamp(:updated_at, public?: true)
+
+    # The conflict field a LocalOutbox client stale-checks against. Deliberately
+    # a **plain, client-authored** integer (accepted below, never auto-managed):
+    # the client owns and increments it, so it can predict its own version chain
+    # (an offline create→update→destroy is v1→v2→v3, each flush's base matches)
+    # while a *peer's* write still advances the server's copy and trips a real
+    # conflict. Monotonic and skew-free, unlike a wall-clock timestamp.
+    attribute(:version, :integer, public?: true, default: 1, allow_nil?: false)
   end
 
   relationships do
@@ -77,7 +87,19 @@ defmodule TodoServer.Todo do
   end
 
   actions do
-    default_accept([:id, :title, :completed, :public, :priority, :due_date, :list_id, :parent_id])
+    default_accept([
+      :id,
+      :title,
+      :completed,
+      :public,
+      :priority,
+      :due_date,
+      :list_id,
+      :parent_id,
+      # Stored verbatim from the client — the server must NOT author this, or the
+      # client's stale-check base image could never match (see the attribute).
+      :version
+    ])
 
     read :read do
       primary?(true)

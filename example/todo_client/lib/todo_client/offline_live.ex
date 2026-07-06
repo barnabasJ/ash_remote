@@ -25,7 +25,9 @@ defmodule TodoClient.OfflineLive do
   alias AshMultiDatalayer.Orchestrator.LocalOutbox
   alias TodoClient.Local.Todo
 
-  @fields ~w(title completed priority due_date public updated_at)
+  # `version` is the stale-check field (client-authored, see TodoClient.BumpVersion);
+  # showing it in the three-way diff makes the conflict cause legible.
+  @fields ~w(title completed priority due_date public version updated_at)
   @tick_ms 2500
 
   @impl true

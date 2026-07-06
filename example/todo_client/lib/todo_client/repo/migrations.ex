@@ -23,6 +23,10 @@ defmodule TodoClient.Repo.Migrations do
         add(:due_date, :date)
         add(:inserted_at, :utc_datetime_usec)
         add(:updated_at, :utc_datetime_usec)
+        # Client-authored conflict counter (TodoClient.BumpVersion) — the field
+        # LocalOutbox stale-checks. Fresh DBs each run, so it lives in the base
+        # migration rather than a separate ALTER.
+        add(:version, :integer, default: 1)
       end
 
       create_if_not_exists table("outbox_entries", primary_key: false) do
