@@ -130,8 +130,8 @@ defmodule AshRemote.Server.Fields do
     do: Map.new(map, fn {k, v} -> {String.to_existing_atom(to_string(k)), v} end)
 
   defp attribute?(resource, name), do: not is_nil(Info.public_attribute(resource, name))
-  defp aggregate?(resource, name), do: not is_nil(Info.aggregate(resource, name))
-  defp calculation?(resource, name), do: not is_nil(Info.calculation(resource, name))
+  defp aggregate?(resource, name), do: not is_nil(Info.public_aggregate(resource, name))
+  defp calculation?(resource, name), do: not is_nil(Info.public_calculation(resource, name))
   defp relationship?(resource, name), do: not is_nil(Info.public_relationship(resource, name))
   defp related(resource, name), do: Info.public_relationship(resource, name).destination
 

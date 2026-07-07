@@ -17,6 +17,10 @@ defmodule AshRemote.Backend.Todo do
     attribute(:status, AshRemote.Backend.Todo.Status, public?: true, default: :pending)
     attribute(:priority_score, AshRemote.Backend.PriorityScore, public?: true)
     attribute(:due_date, :date, public?: true)
+
+    # Private — retained regression for #1's private-attribute half (fixed in
+    # an earlier run): must never be selectable/serializable by name.
+    attribute(:internal_notes, :string, public?: false)
   end
 
   relationships do
@@ -43,6 +47,12 @@ defmodule AshRemote.Backend.Todo do
   aggregates do
     count :comment_count, :comments do
       public?(true)
+    end
+
+    # Private — exercises the RPC field-policy boundary (B1): must never be
+    # selectable/serializable by name over the wire.
+    count :internal_comment_count, :comments do
+      public?(false)
     end
   end
 
@@ -75,6 +85,12 @@ defmodule AshRemote.Backend.Todo do
         allow_nil?(false)
         default("")
       end
+    end
+
+    # Private — exercises the RPC field-policy boundary (B1): must never be
+    # selectable/serializable by name over the wire.
+    calculate :internal_risk_score, :integer, expr(1) do
+      public?(false)
     end
   end
 

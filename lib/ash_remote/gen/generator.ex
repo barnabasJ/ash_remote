@@ -357,10 +357,16 @@ defmodule AshRemote.Gen do
 
   # A manifest aggregate field is reproducible on the client when the server
   # injected its relationship (a single-hop relationship the client mirrors) —
-  # and, if it has a filter, that filter mirrored too.
-  defp reproducible_aggregate?(%{kind: :aggregate, relationship: relationship})
-       when not is_nil(relationship),
-       do: true
+  # and, if it has a filter, that filter mirrored too. The manifest is input
+  # from a source we don't fully trust (B2) — re-verify the filter against
+  # `AshRemote.Expression.safe?` here even though a legitimate server only
+  # ever publishes filters that already passed this gate, exactly as the
+  # calculation path re-verifies `field.expression` below.
+  defp reproducible_aggregate?(%{kind: :aggregate, relationship: relationship} = field)
+       when not is_nil(relationship) do
+    filter = Map.get(field, :aggregate_filter)
+    is_nil(filter) or AshRemote.Expression.safe?(filter)
+  end
 
   defp reproducible_aggregate?(_field), do: false
 

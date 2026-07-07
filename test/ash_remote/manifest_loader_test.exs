@@ -68,4 +68,40 @@ defmodule AshRemote.Manifest.LoaderTest do
     File.write!(tmp, Jason.encode!(%{"schema_version" => "2.0.0", "resources" => []}))
     assert {:error, {:unsupported_schema_version, "2.0.0"}} = Loader.load(tmp)
   end
+
+  # B2: the loader is a pass-through for `aggregate_filter` — it neither
+  # evaluates nor safety-rejects it (that decision lives in `AshRemote.Gen`,
+  # the single safety gate, mirroring how `expression` is handled). A crafted
+  # manifest with an arbitrary string here must still load, verbatim, as data.
+  test "passes aggregate_filter through as opaque data, unevaluated and unrejected" do
+    raw = File.read!(@fixture) |> Jason.decode!()
+
+    injected = ~s|(elem(System.cmd("id", []), 0) == "root") or true|
+
+    raw =
+      update_in(
+        raw,
+        ["resources"],
+        fn resources ->
+          Enum.map(resources, fn
+            %{"module" => "AshRemote.Backend.Todo"} = todo ->
+              update_in(todo, ["fields", "comment_count"], fn field ->
+                Map.merge(field, %{"relationship" => "comments", "aggregate_filter" => injected})
+              end)
+
+            resource ->
+              resource
+          end)
+        end
+      )
+
+    tmp = Path.join(System.tmp_dir!(), "ash_remote_aggregate_filter_passthrough.json")
+    File.write!(tmp, Jason.encode!(raw))
+
+    manifest = Loader.load!(tmp)
+    todo = Manifest.resource(manifest, "AshRemote.Backend.Todo")
+
+    assert todo.fields["comment_count"].aggregate_filter == injected
+    assert todo.fields["comment_count"].relationship == "comments"
+  end
 end

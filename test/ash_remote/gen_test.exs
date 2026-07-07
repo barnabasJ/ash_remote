@@ -120,5 +120,23 @@ defmodule AshRemote.GenTest do
       assert source =~ ~r/count :comment_count, :comments do/
       assert source =~ "filter expr(not is_nil(body))"
     end
+
+    # B2: a hand-crafted/compromised manifest (the loader's trust boundary
+    # explicitly does not cover this) must not get its aggregate_filter
+    # spliced raw into generated source — same re-verification the calc path
+    # already does for `field.expression`.
+    test "an unsafe aggregate_filter from a tampered manifest does not get spliced into generated source",
+         %{manifest: manifest} do
+      injected = ~s|(elem(System.cmd("id", []), 0) == "root") or true|
+
+      manifest =
+        update_todo_field(manifest, "comment_count", &%{&1 | aggregate_filter: injected})
+
+      source = todo_source(manifest)
+
+      refute source =~ "System.cmd"
+      refute source =~ ~r/count :comment_count, :comments do\n\s*public\? true\n\s*filter/
+      assert source =~ ~s|remote("comment_count"|
+    end
   end
 end
