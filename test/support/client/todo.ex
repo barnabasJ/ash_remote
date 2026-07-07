@@ -20,6 +20,9 @@ defmodule AshRemote.Client.Todo do
 
   aggregates do
     count(:comment_count, :comments, public?: true)
+    # M7: a decimal-typed aggregate target — decoded uncast, this comes
+    # back as a raw wire value instead of a %Decimal{}.
+    avg(:avg_comment_rating, :comments, :rating, public?: true)
   end
 
   calculations do
@@ -34,6 +37,12 @@ defmodule AshRemote.Client.Todo do
     calculate :title_with_prefix, :string, expr(title) do
       public?(true)
       argument(:prefix, :string, allow_nil?: false, default: "")
+    end
+
+    # M7: a date-typed calculation target — decoded uncast, this comes back
+    # as a raw wire string instead of a %Date{}.
+    calculate :deadline_echo, :date, expr(due_date) do
+      public?(true)
     end
   end
 

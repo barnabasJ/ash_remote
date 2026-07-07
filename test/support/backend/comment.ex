@@ -13,6 +13,8 @@ defmodule AshRemote.Backend.Comment do
     uuid_primary_key(:id)
 
     attribute(:body, :string, public?: true, allow_nil?: false)
+    # M7: gives an aggregate something decimal-typed to :avg/:sum over.
+    attribute(:rating, :decimal, public?: true)
   end
 
   relationships do

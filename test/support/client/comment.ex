@@ -7,6 +7,7 @@ defmodule AshRemote.Client.Comment do
   attributes do
     uuid_primary_key(:id)
     attribute(:body, :string, public?: true, allow_nil?: false)
+    attribute(:rating, :decimal, public?: true)
   end
 
   relationships do

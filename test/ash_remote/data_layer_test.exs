@@ -4,6 +4,7 @@ defmodule AshRemote.DataLayerTest do
   @moduletag :integration
 
   require Ash.Query
+  import Ash.Expr
 
   alias AshRemote.Backend.TestBackend
   alias AshRemote.Client.{Comment, Todo, User}
@@ -212,6 +213,101 @@ defmodule AshRemote.DataLayerTest do
 
       assert updated.email == "ada2@example.com"
       assert updated.name == "Ada"
+    end
+  end
+
+  # --- M7: query calculations/aggregates decoded uncast ---------------------
+
+  describe "M7: query-plan calculation/aggregate targets are cast to their Ash type" do
+    # Unit-level (not an RPC round-trip): `place/4` is where the bug lives,
+    # and exercising it directly with a well-formed %Ash.Query.Calculation{}/
+    # %Ash.Query.Aggregate{} (the shape add_calculation/add_aggregate
+    # receive from Ash core, `type`/`constraints` already resolved) isolates
+    # the fix from ash_remote's ad-hoc-query-time-calc RPC support (which
+    # turned out not to reliably resolve `.type` for every construction
+    # path — a separate, pre-existing concern outside M7's scope).
+    alias AshRemote.Decoder
+
+    defp calc_target(name, type, opts \\ []) do
+      {to_string(name),
+       {:calculation,
+        %Ash.Query.Calculation{
+          name: name,
+          type: type,
+          constraints: opts[:constraints] || [],
+          load: opts[:load]
+        }}}
+    end
+
+    defp agg_target(name, type, opts \\ []) do
+      {to_string(name),
+       {:aggregate,
+        %Ash.Query.Aggregate{
+          name: name,
+          type: type,
+          constraints: opts[:constraints] || [],
+          load: opts[:load]
+        }}}
+    end
+
+    test "a calculation NOT aliased via load (the calculations map) is cast" do
+      {wire_key, _target} = plan_entry = calc_target(:due_date_probe, :date)
+      map = %{wire_key => "2026-08-01"}
+
+      record = Decoder.decode_record(map, Todo, [plan_entry])
+
+      # Unfixed: place/4's default :calculation clause Map.puts the raw
+      # wire value (an ISO8601 string) straight into `calculations`.
+      assert record.calculations[:due_date_probe] == ~D[2026-08-01]
+    end
+
+    test "a calculation aliased via load decodes onto the field" do
+      {wire_key, _target} = plan_entry = calc_target(:deadline_echo, :date, load: :deadline_echo)
+      map = %{wire_key => "2026-08-02"}
+
+      record = Decoder.decode_record(map, Todo, [plan_entry])
+
+      # Unfixed: place/4's load-aliased :calculation clause Map.puts the
+      # raw wire value directly as the field — a plain string.
+      assert record.deadline_echo == ~D[2026-08-02]
+    end
+
+    test "an aggregate NOT aliased via load (the aggregates map) is cast" do
+      {wire_key, _target} = plan_entry = agg_target(:avg_rating_probe, :decimal)
+      map = %{wire_key => 4.5}
+
+      record = Decoder.decode_record(map, Todo, [plan_entry])
+
+      # Unfixed: place/4's default :aggregate clause Map.puts the raw wire
+      # value straight into `aggregates` — a float, not %Decimal{}.
+      assert %Decimal{} = record.aggregates[:avg_rating_probe]
+      assert Decimal.equal?(record.aggregates[:avg_rating_probe], Decimal.new("4.5"))
+    end
+
+    test "an aggregate aliased via load decodes onto the field" do
+      {wire_key, _target} =
+        plan_entry = agg_target(:avg_comment_rating, :decimal, load: :avg_comment_rating)
+
+      map = %{wire_key => 3.5}
+
+      record = Decoder.decode_record(map, Todo, [plan_entry])
+
+      # Unfixed: place/4's load-aliased :aggregate clause Map.puts the raw
+      # wire value directly as the field — a plain float.
+      assert %Decimal{} = record.avg_comment_rating
+      assert Decimal.equal?(record.avg_comment_rating, Decimal.new("3.5"))
+    end
+
+    test "nil and uncastable wire values pass through safely (no raise)" do
+      {calc_key, _} = calc_entry = calc_target(:due_date_probe, :date)
+      {agg_key, _} = agg_entry = agg_target(:avg_rating_probe, :decimal)
+      map = %{calc_key => nil, agg_key => "not-a-number"}
+
+      record = Decoder.decode_record(map, Todo, [calc_entry, agg_entry])
+
+      assert record.calculations[:due_date_probe] == nil
+      # An uncastable value falls back to the raw wire value, never raises.
+      assert record.aggregates[:avg_rating_probe] == "not-a-number"
     end
   end
 end

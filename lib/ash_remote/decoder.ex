@@ -60,20 +60,28 @@ defmodule AshRemote.Decoder do
 
   defp place(record, {:calculation, %{load: load} = calc}, value, _resource)
        when not is_nil(load) do
-    Map.put(record, calc.load, value)
+    Map.put(record, calc.load, cast_typed(calc.type, calc.constraints, value))
   end
 
   defp place(record, {:calculation, calc}, value, _resource) do
-    Map.update!(record, :calculations, &Map.put(&1, calc.name, value))
+    Map.update!(
+      record,
+      :calculations,
+      &Map.put(&1, calc.name, cast_typed(calc.type, calc.constraints, value))
+    )
   end
 
-  defp place(record, {:aggregate, %{load: load} = _agg}, value, _resource)
+  defp place(record, {:aggregate, %{load: load} = agg}, value, _resource)
        when not is_nil(load) do
-    Map.put(record, load, value)
+    Map.put(record, load, cast_typed(agg.type, agg.constraints, value))
   end
 
   defp place(record, {:aggregate, agg}, value, _resource) do
-    Map.update!(record, :aggregates, &Map.put(&1, agg.name, value))
+    Map.update!(
+      record,
+      :aggregates,
+      &Map.put(&1, agg.name, cast_typed(agg.type, agg.constraints, value))
+    )
   end
 
   @doc "Cast a wire value to an attribute's Ash type, falling back to the raw value."
@@ -93,14 +101,24 @@ defmodule AshRemote.Decoder do
   @doc "Cast a wire value to a calculation's Ash type, falling back to the raw value."
   def cast_calculation(resource, name, value) do
     case Ash.Resource.Info.calculation(resource, name) do
-      %{type: type, constraints: constraints} ->
-        case Ash.Type.cast_input(type, value, constraints) do
-          {:ok, cast} -> cast
-          _ -> value
-        end
+      %{type: type, constraints: constraints} -> cast_typed(type, constraints, value)
+      _ -> value
+    end
+  end
 
-      _ ->
-        value
+  # M7: query-plan calculations/aggregates (Ash.Query.Calculation /
+  # Ash.Query.Aggregate) carry their own resolved `type`/`constraints`
+  # directly — no resource-level DSL lookup by name needed (and none would
+  # work for an ad-hoc/dynamically-loaded target anyway). Falls back to the
+  # raw wire value on a nil type or a cast failure — never raises, so a
+  # nil/error wire value passes through unchanged rather than poisoning the
+  # decode.
+  defp cast_typed(nil, _constraints, value), do: value
+
+  defp cast_typed(type, constraints, value) do
+    case Ash.Type.cast_input(type, value, constraints || []) do
+      {:ok, casted} -> casted
+      _ -> value
     end
   end
 end

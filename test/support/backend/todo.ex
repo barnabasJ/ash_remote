@@ -49,6 +49,11 @@ defmodule AshRemote.Backend.Todo do
       public?(true)
     end
 
+    # M7: a decimal-typed aggregate target.
+    avg :avg_comment_rating, :comments, :rating do
+      public?(true)
+    end
+
     # Private — exercises the RPC field-policy boundary (B1): must never be
     # selectable/serializable by name over the wire.
     count :internal_comment_count, :comments do
@@ -91,6 +96,11 @@ defmodule AshRemote.Backend.Todo do
     # selectable/serializable by name over the wire.
     calculate :internal_risk_score, :integer, expr(1) do
       public?(false)
+    end
+
+    # M7: a date-typed calculation target.
+    calculate :deadline_echo, :date, expr(due_date) do
+      public?(true)
     end
   end
 
