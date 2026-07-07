@@ -64,8 +64,60 @@ defmodule AshRemote.Server.Notifier do
   defp resolve_domain(%{resource: resource}), do: Ash.Resource.Info.domain(resource)
 
   defp broadcast(pub_sub, notification, resource) do
-    tenant = notification.changeset && notification.changeset.to_tenant
     source = inspect(resource)
+
+    case resolve_tenant(notification, resource) do
+      {:ok, tenant} ->
+        publish(pub_sub, notification, resource, source, tenant)
+
+      :unresolvable ->
+        # M8: a changeset-less mutation on a context-multitenant resource
+        # (the tenant lives only in changeset/context, never on the record
+        # itself) has no tenant to derive — publishing to the untenanted
+        # topic would be silently unjoinable (no multitenant subscriber
+        # joins it). Never guess; emit a concrete, testable signal instead
+        # so a supervising reconcile job can react — logged AND telemetried,
+        # not a docs-only closure.
+        Logger.warning(
+          "ash_remote: cannot determine tenant for a changeset-less #{source} " <>
+            "notification (#{notification.action.type}) — realtime delivery skipped, " <>
+            "not broadcast to an unjoinable topic"
+        )
+
+        :telemetry.execute(
+          [:ash_remote, :server, :notifier, :unresolvable_tenant],
+          %{count: 1},
+          %{resource: resource, action: notification.action.name}
+        )
+    end
+
+    :ok
+  end
+
+  # A changeset carries the authoritative tenant regardless of strategy.
+  defp resolve_tenant(%{changeset: changeset}, _resource) when not is_nil(changeset) do
+    {:ok, changeset.to_tenant}
+  end
+
+  # Changeset-less (e.g. a manual Ash.Notifier.notify/1 call, or a bulk
+  # operation that didn't attach one): for attribute-strategy multitenancy
+  # the tenant lives ON the record — read it directly rather than falling
+  # back to the unjoinable untenanted topic. Context-strategy has nowhere
+  # to recover it from (the record carries no tenant attribute at all).
+  defp resolve_tenant(notification, resource) do
+    case Ash.Resource.Info.multitenancy_strategy(resource) do
+      nil ->
+        {:ok, nil}
+
+      :attribute ->
+        {:ok, Map.get(notification.data, Ash.Resource.Info.multitenancy_attribute(resource))}
+
+      :context ->
+        :unresolvable
+    end
+  end
+
+  defp publish(pub_sub, notification, resource, source, tenant) do
     topic = Topics.topic(source, tenant)
 
     # Notifications are best-effort hints; a transport failure must never fail
@@ -76,8 +128,6 @@ defmodule AshRemote.Server.Notifier do
       error ->
         Logger.warning("ash_remote: realtime broadcast to #{topic} failed: #{inspect(error)}")
     end
-
-    :ok
   end
 
   @doc false
