@@ -19,7 +19,7 @@ defmodule AshRemote.Error do
   @doc "Convert a single wire error map into an `Ash.Error` struct."
   def to_exception(%{"type" => type} = error) do
     message = error["message"] || "remote error"
-    path = Enum.map(error["path"] || [], &to_atom/1)
+    path = error["path"] || []
     field = List.last(path)
 
     case type do
@@ -54,13 +54,5 @@ defmodule AshRemote.Error do
 
   def to_exception(other) do
     Ash.Error.Unknown.UnknownError.exception(error: inspect(other))
-  end
-
-  defp to_atom(a) when is_atom(a), do: a
-
-  defp to_atom(s) when is_binary(s) do
-    String.to_existing_atom(s)
-  rescue
-    ArgumentError -> String.to_atom(s)
   end
 end

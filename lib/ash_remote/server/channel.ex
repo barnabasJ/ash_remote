@@ -174,7 +174,12 @@ if Code.ensure_loaded?(Phoenix.Channel) do
       published_resources =
         otp_app |> AshRemote.Server.publications() |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
 
-      case AshRemote.Server.ResourceResolver.resolve(otp_app, :channel, published_resources, source) do
+      case AshRemote.Server.ResourceResolver.resolve(
+             otp_app,
+             :channel,
+             published_resources,
+             source
+           ) do
         {:ok, module} -> {:ok, module}
         :error -> {:error, "unknown_resource"}
       end

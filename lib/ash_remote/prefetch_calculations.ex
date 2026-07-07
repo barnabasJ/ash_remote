@@ -3,13 +3,17 @@ defmodule AshRemote.PrefetchCalculations do
   Read preparation (added to generated read actions) that records which
   `AshRemote.RemoteCalculation`-backed calculations the query loads.
 
-  The list rides the query context into `AshRemote.DataLayer`, which folds
-  those calculations into the same `/rpc/run` and stashes the decoded values
-  in record metadata — so when the data layer serves the read, every
-  remote calculation finds its value prefetched and makes no extra request.
-  When the rows come from somewhere else (a cache layer, `Ash.load/2` on
-  existing records), the same list lets the first calculation fetch the
-  whole bundle in one request (see `AshRemote.RemoteCalculation`).
+  It only matters for hand-written `{AshRemote.RemoteCalculation, calc: ...}`
+  calculations: generated resources emit proxied calcs as `remote(...)`
+  expression calculations, whose values come back through the normal
+  encode/decode path — for those this preparation records nothing and is a
+  no-op. For `RemoteCalculation`-backed calcs, the recorded list rides the
+  query context into `AshRemote.DataLayer`, which folds them into the same
+  `/rpc/run` and stashes the decoded values in record metadata, so each such
+  calculation finds its value prefetched and makes no extra request. When
+  the rows come from somewhere else (a cache layer, `Ash.load/2` on existing
+  records), the same list lets the first calculation fetch the whole bundle
+  in one request (see `AshRemote.RemoteCalculation`).
   """
   use Ash.Resource.Preparation
 

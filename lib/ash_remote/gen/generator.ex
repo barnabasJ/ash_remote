@@ -6,17 +6,20 @@ defmodule AshRemote.Gen do
 
     * `kind: :type` — one module per named type (`Ash.Type.Enum` / `Ash.Type.NewType`)
     * `kind: :resource` — one module per resource (attributes, relationships,
-      calc/aggregate stubs, action stubs, and a `remote` block), backed by
-      `AshRemote.DataLayer`. Carries `entities:` — per-section `{name, code}`
-      snippets so regeneration can add missing entities to an existing module
-      instead of rewriting it.
+      validations, calculations, aggregates, action stubs, and a `remote`
+      block), backed by `AshRemote.DataLayer`. Carries `entities:` —
+      per-section `{name, code}` snippets so regeneration can add missing
+      entities to an existing module instead of rewriting it.
     * `kind: :domain` — a client domain listing the resources (in `resources:`)
 
   Backend module names are re-namespaced under `:namespace` by stripping the
-  longest common prefix. Aggregates and calculations are both emitted as
-  loadable calculation stubs — the backend computes their values; the stub's
-  placeholder expression is non-constant (so Ash routes it through the data
-  layer) and its type is irrelevant (the data layer overwrites it).
+  longest common prefix. Reproducible aggregates (single-hop relationship the
+  client mirrors, plus an optionally mirrored filter) are emitted as NATIVE
+  aggregate entities (`count/sum/avg :name, :relationship`), so a caching
+  data layer can fold them from related rows. Everything else — mirrorable
+  expressions become real `expr(...)` calcs; opaque calculations and
+  non-reproducible aggregates become `expr(remote(...))` proxy calcs the
+  backend resolves by name (filterable and sortable there).
   """
 
   alias AshRemote.Manifest
@@ -26,8 +29,9 @@ defmodule AshRemote.Gen do
 
   Returns a list of `%{module: String.t(), kind: :type | :resource | :domain,
   source: String.t()}` maps; `:resource` entries also carry `entities:`
-  (`%{attributes | relationships | calculations | actions => [{name, code}]}`)
-  and the `:domain` entry carries `resources:` (client module strings).
+  (`%{attributes | relationships | validations | calculations | aggregates |
+  actions => [{name, code}]}`) and the `:domain` entry carries `resources:`
+  (client module strings).
   """
   def generate(%Manifest{} = manifest, opts) do
     namespace = Keyword.fetch!(opts, :namespace)

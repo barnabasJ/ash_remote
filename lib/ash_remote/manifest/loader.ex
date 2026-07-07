@@ -28,27 +28,27 @@ defmodule AshRemote.Manifest.Loader do
   # closed vocabulary here as literals means these atoms exist the moment
   # THIS module loads, independent of load order elsewhere.
   @known_atoms [
-    # AshRemote.Manifest.Field.kind
-    :attribute,
-    :aggregate,
-    :calculation,
-    # AshRemote.Manifest.Type.kind (structural, non-primitive)
-    :type_ref,
-    :enum,
-    # AshRemote.Manifest.Relationship.type / .cardinality
-    :belongs_to,
-    :has_one,
-    :has_many,
-    :many_to_many,
-    :one,
-    :many,
-    # AshRemote.Manifest.Action.type
-    :read,
-    :create,
-    :update,
-    :destroy,
-    :action
-  ] ++ Keyword.keys(Ash.Type.short_names())
+                 # AshRemote.Manifest.Field.kind
+                 :attribute,
+                 :aggregate,
+                 :calculation,
+                 # AshRemote.Manifest.Type.kind (structural, non-primitive)
+                 :type_ref,
+                 :enum,
+                 # AshRemote.Manifest.Relationship.type / .cardinality
+                 :belongs_to,
+                 :has_one,
+                 :has_many,
+                 :many_to_many,
+                 :one,
+                 :many,
+                 # AshRemote.Manifest.Action.type
+                 :read,
+                 :create,
+                 :update,
+                 :destroy,
+                 :action
+               ] ++ Keyword.keys(Ash.Type.short_names())
 
   @doc false
   def known_atoms, do: @known_atoms
@@ -103,9 +103,13 @@ defmodule AshRemote.Manifest.Loader do
     version = json["schema_version"] || ""
     expected = Keyword.get(opts, :expected_major, @supported_major)
 
-    case String.split(version, ".") do
-      [^expected | _] -> :ok
-      _ -> {:error, {:unsupported_schema_version, version}}
+    if not is_binary(version) do
+      {:error, {:unsupported_schema_version, version}}
+    else
+      case String.split(version, ".") do
+        [^expected | _] -> :ok
+        _ -> {:error, {:unsupported_schema_version, version}}
+      end
     end
   end
 
@@ -172,7 +176,7 @@ defmodule AshRemote.Manifest.Loader do
       module: module,
       embedded?: resource["embedded"] || false,
       description: resource["description"],
-      primary_key: Enum.map(resource["primary_key"] || [], &atom(&1, "resources.#{module}.primary_key")),
+      primary_key: resource["primary_key"] || [],
       fields: normalize_fields(resource["fields"] || %{}),
       relationships: normalize_relationships(resource["relationships"] || %{}),
       identities: normalize_identities(resource["identities"] || %{}),
@@ -260,9 +264,8 @@ defmodule AshRemote.Manifest.Loader do
          cardinality: atom(rel["cardinality"], "relationships.#{name}.cardinality"),
          destination: rel["destination"],
          description: rel["description"],
-         source_attribute: atom(rel["source_attribute"], "relationships.#{name}.source_attribute"),
-         destination_attribute:
-           atom(rel["destination_attribute"], "relationships.#{name}.destination_attribute"),
+         source_attribute: rel["source_attribute"],
+         destination_attribute: rel["destination_attribute"],
          allow_nil?: rel["allow_nil"]
        }}
     end)
@@ -270,7 +273,7 @@ defmodule AshRemote.Manifest.Loader do
 
   defp normalize_identities(identities) do
     Map.new(identities, fn {name, %{"keys" => keys}} ->
-      {name, Enum.map(keys, &atom(&1, "identities.#{name}.keys"))}
+      {name, keys}
     end)
   end
 

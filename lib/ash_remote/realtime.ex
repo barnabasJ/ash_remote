@@ -20,8 +20,10 @@ defmodule AshRemote.Realtime do
       RPC base_url). Useful when the socket lives on a different host/port than
       the HTTP RPC endpoint.
     * `:socket_path` — endpoint socket mount (default `"/ash_remote/socket"`).
-    * `:connect_params` — `map | (-> map) | {m,f,a}`, evaluated on every connect
-      so reconnects can carry fresh tokens. Sent as channel join params.
+    * `:connect_params` — `map | (-> map) | {m,f,a}`, evaluated ONCE at
+      connection start (not per reconnect — a fresh token only arrives when
+      the supervisor restarts the connection process). Sent as channel join
+      params.
     * `:tenant` — `nil | tenant | {m,f,a}`, the tenant segment for every topic.
     * `:echo` — `:suppress` (default) drops the broadcast copy of the client's
       own writes; `:deliver` delivers them (marked `origin: :remote`).

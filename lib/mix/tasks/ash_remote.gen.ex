@@ -7,7 +7,8 @@ defmodule Mix.Tasks.AshRemote.Gen do
 
   Regeneration is non-destructive: a module that doesn't exist yet is created
   whole; an existing module only gains the manifest entities it's missing
-  (attributes, relationships, calculations, actions, domain resource entries).
+  (attributes, relationships, validations, calculations, aggregates, actions,
+  domain resource entries).
   Anything you've added or edited by hand is left untouched — the manifest
   defines what's managed, everything else is yours.
 

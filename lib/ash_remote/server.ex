@@ -13,7 +13,7 @@ defmodule AshRemote.Server do
 
       %{"resource" => module_string, "action" => action_name, "fields" => [...],
         "input" => %{...}, "filter" => %{...}, "sort" => "...", "page" => %{...},
-        "primary_key" => %{...}}
+        "primary_key" => %{...}, "tenant" => ...}
       => %{"success" => true, "data" => ...}
        | %{"success" => false, "errors" => [%{"type","message","path"}]}
 
@@ -316,10 +316,17 @@ defmodule AshRemote.Server do
 
       subject =
         case action.type do
-          :read -> Ash.Query.for_read(resource, action.name, input, subject_opts)
-          :create -> Ash.Changeset.for_create(resource, action.name, input, subject_opts)
-          :update -> resource |> struct() |> Ash.Changeset.for_update(action.name, input, subject_opts)
-          :destroy -> resource |> struct() |> Ash.Changeset.for_destroy(action.name, input, subject_opts)
+          :read ->
+            Ash.Query.for_read(resource, action.name, input, subject_opts)
+
+          :create ->
+            Ash.Changeset.for_create(resource, action.name, input, subject_opts)
+
+          :update ->
+            resource |> struct() |> Ash.Changeset.for_update(action.name, input, subject_opts)
+
+          :destroy ->
+            resource |> struct() |> Ash.Changeset.for_destroy(action.name, input, subject_opts)
         end
 
       errors = if valid?(subject), do: [], else: to_errors(errors_of(subject))
@@ -462,7 +469,12 @@ defmodule AshRemote.Server do
   defp resolve_resource(_otp_app, nil), do: {:error, :missing_resource}
 
   defp resolve_resource(otp_app, module_string) when is_binary(module_string) do
-    case AshRemote.Server.ResourceResolver.resolve(otp_app, :rpc, resources(otp_app), module_string) do
+    case AshRemote.Server.ResourceResolver.resolve(
+           otp_app,
+           :rpc,
+           resources(otp_app),
+           module_string
+         ) do
       {:ok, module} -> {:ok, module}
       :error -> {:error, {:unknown_resource, module_string}}
     end

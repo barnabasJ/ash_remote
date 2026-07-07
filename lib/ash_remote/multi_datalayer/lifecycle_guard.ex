@@ -82,9 +82,9 @@ defmodule AshRemote.MultiDatalayer.LifecycleGuard do
         names -> names
       end
 
-    Enum.each(names, &AshRemote.Realtime.listen_lifecycle/1)
+    refs = Map.new(names, &{monitor_registry(&1), &1})
 
-    {:ok, %{}}
+    {:ok, %{names: names, refs: refs}}
   end
 
   @impl true
@@ -103,33 +103,72 @@ defmodule AshRemote.MultiDatalayer.LifecycleGuard do
     {:noreply, state}
   end
 
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, %{refs: refs} = state) do
+    case Map.pop(refs, ref) do
+      {nil, refs} ->
+        {:noreply, %{state | refs: refs}}
+
+      {name, refs} ->
+        new_ref = monitor_registry(name)
+        {:noreply, %{state | refs: Map.put(refs, new_ref, name)}}
+    end
+  end
+
+  def handle_info({:monitor_registry, name}, %{refs: refs} = state) do
+    new_ref = monitor_registry(name)
+    {:noreply, %{state | refs: Map.put(refs, new_ref, name)}}
+  end
+
   def handle_info(_other, state), do: {:noreply, state}
+
+  defp monitor_registry(name) do
+    AshRemote.Realtime.listen_lifecycle(name)
+    registry = Module.concat(name, Lifecycle)
+
+    case Process.whereis(registry) do
+      nil ->
+        Process.send_after(self(), {:monitor_registry, name}, 100)
+        make_ref()
+
+      pid ->
+        Process.monitor(pid)
+    end
+  end
 
   # Route the gap to whatever strategy the resource declares — ProvenCoverage
   # drops the ledger, LocalOutbox reconciles. Never crashes the guard: a dropped
   # gap reaction self-heals on the next read.
   defp reconcile(resource, tenant, type) do
-    if Code.ensure_loaded?(@info) do
-      {orchestrator, _opts} = @info.orchestrator(resource)
+    try do
+      if Code.ensure_loaded?(@info) do
+        {orchestrator, _opts} = @info.orchestrator(resource)
 
-      if function_exported?(orchestrator, :handle_external_gap, 2) do
-        orchestrator.handle_external_gap(resource, tenant)
+        if Code.ensure_loaded?(orchestrator) and
+             function_exported?(orchestrator, :handle_external_gap, 2) do
+          orchestrator.handle_external_gap(resource, tenant)
 
-        Logger.info(
-          "ash_remote: #{type} for #{inspect(resource)} (tenant #{inspect(tenant)}) — " <>
-            "ran #{inspect(orchestrator)}.handle_external_gap/2"
+          Logger.info(
+            "ash_remote: #{type} for #{inspect(resource)} (tenant #{inspect(tenant)}) — " <>
+              "ran #{inspect(orchestrator)}.handle_external_gap/2"
+          )
+        end
+      else
+        Logger.debug(
+          "ash_remote: #{type} for #{inspect(resource)} — ash_multi_datalayer not loaded, ignoring"
         )
       end
-    else
-      Logger.debug(
-        "ash_remote: #{type} for #{inspect(resource)} — ash_multi_datalayer not loaded, ignoring"
-      )
+    rescue
+      error ->
+        Logger.warning(
+          "ash_remote: gap reaction skipped for #{inspect(resource)}: " <>
+            Exception.format(:error, error, __STACKTRACE__)
+        )
+    catch
+      kind, reason ->
+        Logger.warning(
+          "ash_remote: gap reaction skipped for #{inspect(resource)}: " <>
+            Exception.format(kind, reason, __STACKTRACE__)
+        )
     end
-  rescue
-    error ->
-      Logger.warning(
-        "ash_remote: gap reaction skipped for #{inspect(resource)}: " <>
-          Exception.format(:error, error, __STACKTRACE__)
-      )
   end
 end

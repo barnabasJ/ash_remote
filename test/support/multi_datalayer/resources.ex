@@ -145,7 +145,7 @@ defmodule AshRemote.Test.MultiDatalayer.Notifications do
       data: data,
       changeset: changeset,
       actor: nil,
-      metadata: %{}
+      metadata: %{ash_remote: %{origin: :remote}}
     }
   end
 end

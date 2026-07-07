@@ -41,7 +41,7 @@ defmodule AshRemote.DataLayer do
 
   def can?(_resource, :filter), do: true
   def can?(_resource, :boolean_filter), do: true
-  def can?(_resource, {:filter_expr, _}), do: true
+  def can?(_resource, {:filter_expr, expr}), do: Filter.encodable?(expr)
   def can?(_resource, :nested_expressions), do: true
   def can?(_resource, :sort), do: true
   def can?(_resource, {:sort, _}), do: true
@@ -105,6 +105,14 @@ defmodule AshRemote.DataLayer do
 
   @impl true
   def run_query(%Query{resource: resource} = query, _resource) do
+    if query.filter == false or match?(%Ash.Filter{expression: false}, query.filter) do
+      {:ok, []}
+    else
+      do_run_query(query, resource)
+    end
+  end
+
+  defp do_run_query(%Query{resource: resource} = query, _resource) do
     cfg = remote_config(resource)
     {fields, plan} = query |> Fields.build() |> add_prefetch_calculations(query)
 

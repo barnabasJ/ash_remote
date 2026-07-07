@@ -17,7 +17,10 @@ defmodule AshRemote.Manifest.AtomSafetyTest do
 
   defp write_garbage_manifest!(mutate) do
     manifest = @fixture |> File.read!() |> Jason.decode!() |> mutate.()
-    path = Path.join(System.tmp_dir!(), "garbage_manifest_#{System.unique_integer([:positive])}.json")
+
+    path =
+      Path.join(System.tmp_dir!(), "garbage_manifest_#{System.unique_integer([:positive])}.json")
+
     File.write!(path, Jason.encode!(manifest))
     on_exit(fn -> File.rm(path) end)
     path
@@ -26,7 +29,8 @@ defmodule AshRemote.Manifest.AtomSafetyTest do
   test "a garbage field kind never mints an atom and names the offending key" do
     path =
       write_garbage_manifest!(fn manifest ->
-        todo_index = Enum.find_index(manifest["resources"], &(&1["module"] == "AshRemote.Backend.Todo"))
+        todo_index =
+          Enum.find_index(manifest["resources"], &(&1["module"] == "AshRemote.Backend.Todo"))
 
         update_in(
           manifest,

@@ -34,6 +34,11 @@ defmodule AshRemote.Error.Transport do
   """
   @spec normalize(term()) :: term()
   def normalize({:transport_error, reason}), do: from_transport_error(reason)
+
+  def normalize({:http_error, status, body}) when status in [401, 403] do
+    Ash.Error.Forbidden.Policy.exception(custom_message: "HTTP #{status}: #{inspect(body)}")
+  end
+
   def normalize({:http_error, status, body}), do: from_http_error(status, body)
   def normalize(other), do: other
 

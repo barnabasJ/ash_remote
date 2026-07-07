@@ -37,12 +37,14 @@ defmodule AshRemote.AtomExhaustionTest do
     assert after_count - before_count == 0
   end
 
-  defp join_unknown(socket, garbage), do: subscribe_and_join(socket, "ash_remote:" <> garbage, %{})
+  defp join_unknown(socket, garbage),
+    do: subscribe_and_join(socket, "ash_remote:" <> garbage, %{})
 
   test "an unknown resource string on a channel join never grows the atom table" do
     {:ok, socket} = connect(AshRemote.Backend.RemoteSocket, %{"actor_id" => "alice"})
 
-    for _ <- 1..20, do: join_unknown(socket, "AshRemote.NoSuchResource.Warmup#{:erlang.unique_integer()}")
+    for _ <- 1..20,
+        do: join_unknown(socket, "AshRemote.NoSuchResource.Warmup#{:erlang.unique_integer()}")
 
     before_count = :erlang.system_info(:atom_count)
 

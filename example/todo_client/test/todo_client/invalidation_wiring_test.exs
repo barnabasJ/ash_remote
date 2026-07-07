@@ -38,7 +38,7 @@ defmodule TodoClient.InvalidationWiringTest do
       data: data,
       changeset: changeset,
       actor: nil,
-      metadata: %{}
+      metadata: %{ash_remote: %{origin: :remote}}
     }
   end
 

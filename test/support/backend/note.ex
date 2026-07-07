@@ -35,7 +35,7 @@ defmodule AshRemote.Backend.Note do
     # reach `Ash.Changeset.for_create` inside `Server.validate_action`,
     # independently of `/rpc/run`" (R-1). Gated on a magic input value so it
     # never interferes with ordinary creates/updates.
-    validate {AshRemote.Backend.Note.EchoTenant, []}
+    validate({AshRemote.Backend.Note.EchoTenant, []})
   end
 
   actions do

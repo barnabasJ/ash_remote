@@ -1,9 +1,14 @@
 defmodule AshRemote.RemoteCalculation do
   @moduledoc """
   A calculation whose values are computed by the remote backend and proxied
-  by name — used by the generator for every calculation whose expression
-  cannot be mirrored as data (module calculations, unsupported expression
-  shapes).
+  by name.
+
+  Generated resources no longer use this module: `AshRemote.Gen` emits every
+  non-mirrorable calculation as an expression calculation over the `remote/3`
+  custom expression (`AshRemote.Expressions.Remote`), which stays filterable
+  and sortable by routing through the data layer. This module remains for
+  hand-written resources that want a plain module calculation proxied by
+  name:
 
       calculate :title_with_prefix, :string,
                 {AshRemote.RemoteCalculation, calc: :title_with_prefix}
@@ -25,7 +30,9 @@ defmodule AshRemote.RemoteCalculation do
   No `expression/2` is defined on purpose: Ash therefore refuses filtering
   and sorting on these calculations (its native behaviour for Elixir
   calculations) — a placeholder expression evaluable anywhere would
-  eventually be evaluated somewhere it is wrong.
+  eventually be evaluated somewhere it is wrong. When a proxied calculation
+  must be filterable or sortable, use the `remote/3` expression form instead
+  (what the generator emits).
   """
   use Ash.Resource.Calculation
 

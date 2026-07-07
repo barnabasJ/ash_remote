@@ -167,8 +167,9 @@ if Code.ensure_loaded?(Slipstream) do
       :ok
     end
 
-    # connect_params evaluated per connect — fresh tokens on (re)connect and on
-    # supervisor restart.
+    # Called only from init/1: connect_params are evaluated once per connection
+    # process, so fresh tokens arrive only via a supervisor restart (see the
+    # R-9 note in init/1).
     defp eval({module, fun, args}), do: apply(module, fun, args)
     defp eval(fun) when is_function(fun, 0), do: fun.()
     defp eval(params) when is_map(params), do: params

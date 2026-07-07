@@ -26,7 +26,6 @@ defmodule AshRemote.EncodeTest do
       assert %{"completed" => %{"eq" => true}} = left
       assert %{"title" => %{"eq" => "x"}} = right
     end
-
   end
 
   describe "Sort.encode/1" do

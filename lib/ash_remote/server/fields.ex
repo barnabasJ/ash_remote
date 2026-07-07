@@ -24,12 +24,15 @@ defmodule AshRemote.Server.Fields do
   end
 
   defp add_field(resource, name, select, load) when is_binary(name) do
-    add_named(resource, String.to_existing_atom(name), select, load)
+    case public_name(resource, name) do
+      {:ok, atom} -> add_named(resource, atom, select, load)
+      :error -> {select, load}
+    end
   end
 
   defp add_field(resource, %{} = map, select, load) do
     [{key, spec}] = Map.to_list(map)
-    name = String.to_existing_atom(key)
+    name = public_name!(resource, key)
 
     cond do
       relationship?(resource, name) ->
@@ -42,8 +45,11 @@ defmodule AshRemote.Server.Fields do
         args = spec |> args() |> atomize_keys()
         {select, [{name, args} | load]}
 
-      true ->
+      aggregate?(resource, name) ->
         {select, [name | load]}
+
+      true ->
+        {select, load}
     end
   end
 
@@ -53,7 +59,7 @@ defmodule AshRemote.Server.Fields do
       aggregate?(resource, name) -> {select, [name | load]}
       calculation?(resource, name) -> {select, [name | load]}
       relationship?(resource, name) -> {select, [name | load]}
-      true -> {[name | select], load}
+      true -> {select, load}
     end
   end
 
@@ -68,13 +74,15 @@ defmodule AshRemote.Server.Fields do
     Enum.reduce(fields, %{}, fn field, acc ->
       case field do
         name when is_binary(name) ->
-          atom = String.to_existing_atom(name)
-          Map.put(acc, name, value(Map.get(record, atom)))
+          case public_name(resource, name) do
+            {:ok, atom} -> Map.put(acc, name, value(field_value(record, resource, atom)))
+            :error -> acc
+          end
 
         %{} = map ->
           [{key, spec}] = Map.to_list(map)
-          atom = String.to_existing_atom(key)
-          val = Map.get(record, atom)
+          atom = public_name!(resource, key)
+          val = field_value(record, resource, atom)
 
           if relationship?(resource, atom) do
             dest = related(resource, atom)
@@ -87,9 +95,29 @@ defmodule AshRemote.Server.Fields do
   end
 
   defp loaded(%Ash.NotLoaded{}), do: nil
+  defp loaded(%Ash.ForbiddenField{}), do: nil
   defp loaded(other), do: other
   defp value(%Ash.NotLoaded{}), do: nil
+  defp value(%Ash.ForbiddenField{}), do: nil
   defp value(other), do: other
+
+  defp field_value(record, resource, atom) do
+    cond do
+      aggregate?(resource, atom) -> loaded_value(record, :aggregates, atom)
+      calculation?(resource, atom) -> loaded_value(record, :calculations, atom)
+      true -> Map.get(record, atom)
+    end
+  end
+
+  defp loaded_value(record, load_key, atom) do
+    values = Map.get(record, load_key, %{}) || %{}
+
+    if is_map(values) and Map.has_key?(values, atom) do
+      Map.get(values, atom)
+    else
+      Map.get(record, atom)
+    end
+  end
 
   defp subfields(spec) when is_list(spec), do: spec
   defp subfields(%{"fields" => fields}), do: fields
@@ -101,9 +129,33 @@ defmodule AshRemote.Server.Fields do
   defp atomize_keys(map),
     do: Map.new(map, fn {k, v} -> {String.to_existing_atom(to_string(k)), v} end)
 
-  defp attribute?(resource, name), do: not is_nil(Info.attribute(resource, name))
+  defp attribute?(resource, name), do: not is_nil(Info.public_attribute(resource, name))
   defp aggregate?(resource, name), do: not is_nil(Info.aggregate(resource, name))
   defp calculation?(resource, name), do: not is_nil(Info.calculation(resource, name))
-  defp relationship?(resource, name), do: not is_nil(Info.relationship(resource, name))
-  defp related(resource, name), do: Info.relationship(resource, name).destination
+  defp relationship?(resource, name), do: not is_nil(Info.public_relationship(resource, name))
+  defp related(resource, name), do: Info.public_relationship(resource, name).destination
+
+  defp public_name(resource, name) do
+    atom = String.to_existing_atom(name)
+
+    if attribute?(resource, atom) or aggregate?(resource, atom) or calculation?(resource, atom) or
+         relationship?(resource, atom) do
+      {:ok, atom}
+    else
+      :error
+    end
+  rescue
+    ArgumentError -> :error
+  end
+
+  defp public_name!(resource, name) do
+    case public_name(resource, name) do
+      {:ok, atom} ->
+        atom
+
+      :error ->
+        raise ArgumentError,
+              "unknown or non-public field #{inspect(name)} for #{inspect(resource)}"
+    end
+  end
 end

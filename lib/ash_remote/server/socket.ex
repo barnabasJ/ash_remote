@@ -27,10 +27,12 @@ defmodule AshRemote.Server.Socket do
 
     * **Topic (join) gate** — `authorize_subscription/4`, which **defaults to
       deny**. Return `:ok` (or `{:ok, socket}`) to allow, anything else to deny.
-    * **Per-record gate** — every broadcast is re-checked against the
-      subscriber's actor with `Ash.can?({record, :read}, actor)` before it is
-      pushed, so a subscription never reveals a row the actor could not read
-      (see `AshRemote.Server.Channel`). Resources without authorizers skip it.
+    * **Per-record gate** — the channel computes the actor's read-policy
+      filter once at join and evaluates it in-memory against every broadcast
+      record before pushing (falling back to a single authorized re-read when
+      the filter can't be decided in memory), so a subscription never reveals
+      a row the actor could not read (see `AshRemote.Server.Channel`).
+      Resources without authorizers skip it.
 
   Assign the actor for the per-record check to `:ash_remote_actor` on the socket
   — typically in an overridden `connect/3` that authenticates the connection

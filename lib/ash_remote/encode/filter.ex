@@ -37,8 +37,16 @@ defmodule AshRemote.Encode.Filter do
   def encode(%Ash.Filter{expression: expression}), do: encode_expr(expression)
   def encode(expression), do: encode_expr(expression)
 
+  def encodable?(filter) do
+    encode(filter)
+    true
+  rescue
+    ArgumentError -> false
+  end
+
   defp encode_expr(nil), do: nil
   defp encode_expr(true), do: %{}
+  defp encode_expr(false), do: false
 
   defp encode_expr(%BooleanExpression{op: op, left: left, right: right}) do
     %{to_string(op) => [encode_expr(left), encode_expr(right)]}

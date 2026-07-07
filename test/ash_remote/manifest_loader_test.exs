@@ -22,7 +22,7 @@ defmodule AshRemote.Manifest.LoaderTest do
 
   test "normalizes Todo fields by kind", %{manifest: manifest} do
     todo = Manifest.resource(manifest, "AshRemote.Backend.Todo")
-    assert todo.primary_key == [:id]
+    assert todo.primary_key == ["id"]
 
     assert todo.fields["title"].kind == :attribute
     assert todo.fields["comment_count"].kind == :aggregate
