@@ -11,11 +11,17 @@ mirrored, actions as stubs — backed by `AshRemote.DataLayer`, which speaks
 ## How it works
 
 ```
-backend (ash + Ash.Info.Manifest)                 client (ash + ash_remote)
-  mix ash.manifest.dump ──► manifest.json ──► mix ash_remote.gen ──► generated resources
-                                                                       │
-   /rpc/run, /rpc/validate  ◄───────────── AshRemote.DataLayer ◄───────┘
+backend (ash + Ash.Info.Manifest)                    client (ash + ash_remote)
+  AshRemote.Server.manifest_json/1 ──► manifest.json ──► mix ash_remote.gen ──► generated resources
+  (served at GET /manifest.json)                                                  │
+   /rpc/run, /rpc/validate  ◄──────────────── AshRemote.DataLayer ◄───────────────┘
 ```
+
+The manifest comes from `AshRemote.Server.manifest_json/1` (served by
+`AshRemote.Server.Router` at `GET /manifest.json`), which enriches Ash core's
+serializer output with the action names, relationship attributes, and
+validations the generator needs — the raw `mix ash.manifest.dump` output alone
+is not sufficient.
 
 - The client's `Ash.Query`/changeset is encoded into an RPC body
   (`AshRemote.Encode.{Fields,Filter,Sort,Pagination}`), sent via
