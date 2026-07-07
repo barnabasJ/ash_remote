@@ -314,10 +314,17 @@ defmodule AshRemote.DataLayer do
   Used by `AshRemote.RemoteCalculation` when rows were served without this
   data layer running (e.g. from a cache layer) — the whole requested bundle
   is fetched at once so sibling calculations share the round-trip.
+
+  `opts` accepts `:actor` and `:context` (the calculation's `source_context`
+  — carries `ash_remote.headers` for explicit request headers) so the bundle
+  request authenticates the same way an ordinary read does (H1) — a bundled
+  fetch omitting these previously ran fully unauthenticated, denying the
+  legitimate actor or (worse) computing values with no authorization
+  context at all.
   """
-  @spec fetch_remote_calculations(module(), [term()], [map()], term()) ::
+  @spec fetch_remote_calculations(module(), [term()], [map()], term(), keyword()) ::
           {:ok, %{atom() => %{String.t() => term()}}} | {:error, term()}
-  def fetch_remote_calculations(resource, pk_values, specs, tenant \\ nil) do
+  def fetch_remote_calculations(resource, pk_values, specs, tenant \\ nil, opts \\ []) do
     cfg = remote_config(resource)
     [pk] = Ash.Resource.Info.primary_key(resource)
     pk_key = to_string(pk)
@@ -332,7 +339,9 @@ defmodule AshRemote.DataLayer do
         tenant: tenant
       })
 
-    with {:ok, response} <- request(cfg, :run, body),
+    headers = request_headers(bundle_request_context(opts))
+
+    with {:ok, response} <- request(cfg, :run, body, headers),
          {:ok, data} <- Protocol.parse_run(response) do
       rows =
         case data do
@@ -392,11 +401,21 @@ defmodule AshRemote.DataLayer do
 
   # --- transport / config --------------------------------------------------
 
-  defp request(cfg, path, body, extra_headers \\ []) do
+  defp request(cfg, path, body, extra_headers) do
     transport = Map.get(cfg, :transport) || Config.new(base_url: Map.fetch!(cfg, :base_url))
     transport = %{transport | headers: transport.headers ++ extra_headers}
     module = transport.module || Transport.Req
     module.request(transport, path, body)
+  end
+
+  # H1: builds `request_headers/1`'s expected shape
+  # (`%{private: %{actor: actor}, ash_remote: %{headers: ...}}`) from the
+  # `opts` a bundled remote-calculation fetch is called with — `:actor` and
+  # `:context` (a calculation's `source_context`, the ORIGINAL read's
+  # context, which is where `context: %{ash_remote: %{headers: ...}}}`
+  # passed to that read/load call ends up).
+  defp bundle_request_context(opts) do
+    %{private: %{actor: opts[:actor]}, ash_remote: get_in(opts[:context] || %{}, [:ash_remote])}
   end
 
   # Per-request headers forwarded to the backend so it can authenticate the call.

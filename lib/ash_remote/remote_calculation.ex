@@ -70,8 +70,15 @@ defmodule AshRemote.RemoteCalculation do
     specs = bundle_specs(context, name, args)
     [pk] = Ash.Resource.Info.primary_key(resource)
     pk_values = Enum.map(records, &Map.get(&1, pk))
+    explicit_headers = get_in(context.source_context || %{}, [:ash_remote, :headers]) || %{}
 
-    memo_key = {__MODULE__, resource, :erlang.phash2({pk_values, specs, context.tenant})}
+    # H1 (pass-7 High + loop-1 review): the memo key must be actor- and
+    # header-scoped — otherwise two same-process loads with different
+    # actors (or different explicit request headers) but the same tenant/
+    # PK/specs would return the FIRST actor's bundle to the second.
+    memo_key =
+      {__MODULE__, resource,
+       :erlang.phash2({pk_values, specs, context.tenant, context.actor, explicit_headers})}
 
     case Process.get(memo_key) do
       nil ->
@@ -80,7 +87,9 @@ defmodule AshRemote.RemoteCalculation do
                  resource,
                  pk_values,
                  specs,
-                 context.tenant
+                 context.tenant,
+                 actor: context.actor,
+                 context: context.source_context
                ) do
           Process.put(memo_key, bundle)
           {:ok, Map.get(bundle, name, %{})}

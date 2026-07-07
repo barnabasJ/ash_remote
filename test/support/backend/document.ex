@@ -25,6 +25,16 @@ defmodule AshRemote.Backend.Document do
     defaults([:read, :create, :update, :destroy])
   end
 
+  calculations do
+    # Actor-dependent — mirroring this into a plain expr(...) generated
+    # calc is impossible (actor() isn't in the mirrorable safe set), so a
+    # hand-written client proxies it via `AshRemote.RemoteCalculation` — H1
+    # exercises exactly that "bundled fetch" path.
+    calculate :is_owner, :boolean, expr(owner_id == ^actor(:id)) do
+      public?(true)
+    end
+  end
+
   policies do
     # Readable by the owner OR if public — both branches reference only attributes
     # carried on the wire, so realtime delivery resolves them in-memory (including
