@@ -176,42 +176,48 @@ defmodule AshRemote.DataLayer do
   end
 
   @impl true
-  # PK-upsert for replication (ash_multi_datalayer LocalOutbox). The remote has
-  # no upsert action, so resolve it: read the row by primary key and dispatch to
-  # this layer's own `update` (present) or `create` (absent). Idempotent under
-  # flush retries — a re-flushed create finds its row and updates instead of
-  # colliding. `keys` (the upsert identity) is the primary key here.
+  # Upsert for replication (ash_multi_datalayer LocalOutbox). The remote has
+  # no upsert action, so resolve it: read the row by the upsert identity
+  # (`keys` — the primary key when no non-PK `upsert_identity` was named, per
+  # H2) and dispatch to this layer's own `update` (present) or `create`
+  # (absent). Idempotent under flush retries — a re-flushed create finds its
+  # row and updates instead of colliding.
   #
-  # Backfill hands us an action-less changeset (attributes force-changed, `data`
-  # empty), so set the resource's primary write action and, for the update path,
-  # lift the primary key into `data` (where `update/2` addresses the row).
+  # Backfill hands us an action-less changeset (attributes force-changed,
+  # `data` empty), so set the resource's primary write action and, for the
+  # update path, address the row by the FOUND row's actual primary key (H2
+  # pass-7 High) — not one rebuilt from the incoming changeset's attributes,
+  # which may lack (or carry a stale) primary key when resolved by a non-PK
+  # identity.
   #
   # R-7: this read-then-write is NOT atomic — two concurrent upserts for the
-  # same PK can both observe `{:ok, nil}` and both attempt `create`; the
-  # second collides against the server's own uniqueness check. Handle it: on
-  # a `:invalid`-class create failure, re-read and retry ONCE as an update —
-  # if the row exists now (the other upsert won the race), converge onto it
-  # instead of surfacing a collision the caller never asked about. This
-  # doesn't close the window (a THIRD concurrent write between the retry's
-  # read and its update could still race) — a true fix needs a server-side
-  # identity upsert, filed as a follow-up against the protocol.
-  def upsert(resource, changeset, _keys) do
-    case remote_pk_row(resource, changeset) do
-      {:ok, nil} -> create_or_retry_as_update(resource, changeset)
-      {:ok, _row} -> update(resource, put_write_action(resource, changeset, :update))
+  # same identity can both observe `{:ok, nil}` and both attempt `create`;
+  # the second collides against the server's own uniqueness check. Handle
+  # it: on a `:invalid`-class create failure, re-read and retry ONCE as an
+  # update — if the row exists now (the other upsert won the race), converge
+  # onto it instead of surfacing a collision the caller never asked about.
+  # This doesn't close the window (a THIRD concurrent write between the
+  # retry's read and its update could still race) — a true fix needs a
+  # server-side identity upsert, filed as a follow-up against the protocol.
+  def upsert(resource, changeset, keys) do
+    keys = if keys in [nil, []], do: Ash.Resource.Info.primary_key(resource), else: keys
+
+    case remote_identity_row(resource, changeset, keys) do
+      {:ok, nil} -> create_or_retry_as_update(resource, changeset, keys)
+      {:ok, row} -> update(resource, put_write_action(resource, changeset, :update, row))
       {:error, error} -> {:error, error}
     end
   end
 
-  defp create_or_retry_as_update(resource, changeset) do
+  defp create_or_retry_as_update(resource, changeset, keys) do
     case create(resource, put_write_action(resource, changeset, :create)) do
       {:ok, record} ->
         {:ok, record}
 
       {:error, %{class: :invalid}} = collision ->
-        case remote_pk_row(resource, changeset) do
+        case remote_identity_row(resource, changeset, keys) do
           {:ok, nil} -> collision
-          {:ok, _row} -> update(resource, put_write_action(resource, changeset, :update))
+          {:ok, row} -> update(resource, put_write_action(resource, changeset, :update, row))
           {:error, _} -> collision
         end
 
@@ -220,17 +226,39 @@ defmodule AshRemote.DataLayer do
     end
   end
 
+  # H2: `upsert/3`'s changeset arrives action-less from a replicated/backfill
+  # write (Backfill.upsert_record builds `Ash.Changeset.new()` — no action,
+  # so `accepted_keys/1` already converges every force-changed field). But
+  # RESOLVING an upsert here assigns a REAL action (`primary_action!`), and
+  # that action may carry its own, narrower `accept` list — silently
+  # truncating a replicated write down to whatever an ordinary user action
+  # would accept. Mark it as a replicated write so `accepted_keys/1` keeps
+  # converging every attribute regardless of the resolved action's accept —
+  # the split is "replicated write" vs "user action", not "action-less".
   defp put_write_action(resource, changeset, :create) do
-    %{
+    # Only mark as replicated when WE resolved the default action (the
+    # caller's changeset had none — the backfill/action-less shape) — a
+    # genuine `Ash.create!(..., upsert?: true)` call already carries its
+    # own action + accept list and must keep respecting it.
+    replicated? = is_nil(changeset.action)
+
+    changeset = %{
       changeset
       | action: changeset.action || Ash.Resource.Info.primary_action!(resource, :create)
     }
+
+    if replicated?, do: mark_replicated_write(changeset), else: changeset
   end
 
-  defp put_write_action(resource, changeset, :update) do
+  # H2: addresses the row by `found_row`'s own primary key — the row the
+  # identity lookup (`keys`, possibly non-PK) actually found — never a
+  # primary key rebuilt from the incoming changeset's attributes, which may
+  # be absent (a replicated write resolved purely by a non-PK identity) or
+  # stale.
+  defp put_write_action(resource, changeset, :update, found_row) do
     data =
       Enum.reduce(Ash.Resource.Info.primary_key(resource), changeset.data, fn key, acc ->
-        Map.put(acc, key, Ash.Changeset.get_attribute(changeset, key))
+        Map.put(acc, key, Map.get(found_row, key))
       end)
 
     %{
@@ -238,13 +266,19 @@ defmodule AshRemote.DataLayer do
       | action: Ash.Resource.Info.primary_action!(resource, :update),
         data: data
     }
+    |> mark_replicated_write()
   end
 
-  defp remote_pk_row(resource, changeset) do
+  defp mark_replicated_write(changeset) do
+    Ash.Changeset.set_context(changeset, %{private: %{ash_remote_replicated_write?: true}})
+  end
+
+  # H2: the lookup filter comes from `keys` (the upsert identity — the
+  # primary key, or a named non-PK `upsert_identity`), not hardcoded to the
+  # primary key, for BOTH the initial lookup and the create-collision retry.
+  defp remote_identity_row(resource, changeset, keys) do
     filter_map =
-      Map.new(Ash.Resource.Info.primary_key(resource), fn key ->
-        {key, Ash.Changeset.get_attribute(changeset, key)}
-      end)
+      Map.new(keys, fn key -> {key, Ash.Changeset.get_attribute(changeset, key)} end)
 
     query = %Query{
       resource: resource,
@@ -371,6 +405,24 @@ defmodule AshRemote.DataLayer do
     |> Map.take(accepted_keys(changeset))
     |> Map.merge(changeset.arguments)
     |> Map.new(fn {k, v} -> {to_string(k), v} end)
+  end
+
+  # H2: a replicated write (LocalOutbox backfill, or upsert/3's internal
+  # create/update resolution — see `mark_replicated_write/1`) converges
+  # every provided field regardless of the resolved action's `accept` — the
+  # split is "replicated write" vs "user action", not "action-less" (an
+  # action-less changeset already falls through to the all-attributes
+  # clause below, but a REPLICATED write can still carry a real,
+  # accept-narrowed action once `put_write_action/3,4` resolves one).
+  defp accepted_keys(%{context: %{private: %{ash_remote_replicated_write?: true}}} = changeset) do
+    # The primary key is never wire "input" — it's addressed via the
+    # separate `primary_key` protocol field (`write/5`) and the remote
+    # correctly rejects it as an input attribute (`writable?: false`).
+    # `changeset.attributes` always carries it (a fresh create's lazy uuid
+    # default lands there even though the attribute itself isn't
+    # user-writable), so it must be excluded here explicitly.
+    pk = Ash.Resource.Info.primary_key(changeset.resource)
+    changeset.attributes |> Map.keys() |> Enum.reject(&(&1 in pk))
   end
 
   defp accepted_keys(%{action: %{accept: accept}}) when is_list(accept), do: accept

@@ -19,7 +19,9 @@ defmodule AshRemote.ManifestRealtimeTest do
         Map.new(realtime["subscriptions"], fn s -> {s["resource"], s["actions"]} end)
 
       assert by_resource["AshRemote.Backend.Todo"] == ["create", "destroy", "update"]
-      assert by_resource["AshRemote.Backend.User"] == ["create"]
+      # H2 exposed User's :update over RPC (needed for the non-PK
+      # upsert-identity tests, which resolve to an update RPC call).
+      assert by_resource["AshRemote.Backend.User"] == ["create", "update"]
 
       # Comment.create is no_publish'd — its only mutation — so it is not advertised.
       refute Map.has_key?(by_resource, "AshRemote.Backend.Comment")

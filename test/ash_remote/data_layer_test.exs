@@ -137,4 +137,81 @@ defmodule AshRemote.DataLayerTest do
     Ash.create!(User, %{name: "Grace", email: "grace@example.com"})
     assert [_only_one] = User |> Ash.Query.limit(1) |> Ash.read!()
   end
+
+  # --- H2: non-PK upsert identity + accept-list truncation ------------------
+
+  describe "H2: non-PK upsert identity" do
+    test "resolves the existing row by a non-PK identity, not a PK-based miss" do
+      existing = Ash.create!(User, %{name: "Ada", email: "ada@example.com"})
+
+      upserted =
+        User
+        |> Ash.Changeset.for_create(:upsert_by_email, %{
+          name: "Ada Updated",
+          email: "ada@example.com"
+        })
+        |> Ash.create!()
+
+      assert upserted.id == existing.id
+      assert upserted.name == "Ada Updated"
+    end
+
+    test "the upsert-resolved update addresses the found row's actual PK, not one rebuilt from changeset attributes" do
+      existing = Ash.create!(User, %{name: "Ada", email: "ada@example.com"})
+      wrong_id = Ash.UUID.generate()
+
+      # Unfixed: `put_write_action(:update)` rebuilds `data`'s PK from
+      # `Ash.Changeset.get_attribute(changeset, :id)` — here a bogus id the
+      # identity lookup never resolved to — targeting the wrong row instead
+      # of the one the non-PK identity actually found.
+      upserted =
+        User
+        |> Ash.Changeset.for_create(:upsert_by_email, %{
+          name: "Ada v2",
+          email: "ada@example.com"
+        })
+        |> Ash.Changeset.force_change_attribute(:id, wrong_id)
+        |> Ash.create!()
+
+      assert upserted.id == existing.id
+      assert Ash.get!(User, existing.id).name == "Ada v2"
+    end
+
+    test "a replicated (upsert-resolved) update converges fields outside the primary update action's accept" do
+      Ash.create!(User, %{name: "Ada", email: "ada@example.com"})
+
+      # `:update`'s accept is `[:email]` only — `:name` is not accepted by
+      # it. The upsert-resolved update path must still converge `:name`
+      # since this is a replicated write, not a direct call to the narrow
+      # `:update` action.
+      upserted =
+        User
+        |> Ash.Changeset.for_create(:upsert_by_email, %{
+          name: "Ada v2",
+          email: "ada@example.com"
+        })
+        |> Ash.create!()
+
+      assert upserted.name == "Ada v2"
+    end
+
+    test "an ordinary action-driven update still respects its own accept list" do
+      existing = Ash.create!(User, %{name: "Ada", email: "ada@example.com"})
+
+      # `force_change_attribute/3` bypasses Ash's own input-validation
+      # rejection (unlike passing `name:` through `for_update`'s params,
+      # which Ash itself refuses outright) — this isolates what THIS data
+      # layer's `input/1`/`accepted_keys/1` does with it: a genuine
+      # action-driven update (no `ash_remote_replicated_write?` context)
+      # must still filter it out via the action's own `accept` list.
+      updated =
+        existing
+        |> Ash.Changeset.for_update(:update, %{email: "ada2@example.com"})
+        |> Ash.Changeset.force_change_attribute(:name, "Should Not Apply")
+        |> Ash.update!()
+
+      assert updated.email == "ada2@example.com"
+      assert updated.name == "Ada"
+    end
+  end
 end

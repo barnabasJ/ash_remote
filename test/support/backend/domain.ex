@@ -23,6 +23,9 @@ defmodule AshRemote.Backend.Domain do
     resource AshRemote.Backend.User do
       expose(:read)
       expose(:create)
+      # H2: non-PK upsert identity tests need the update RPC path (an
+      # upsert that resolves to "row exists" dispatches to update/2).
+      expose(:update)
     end
 
     resource AshRemote.Backend.Comment do
