@@ -27,6 +27,40 @@ if Code.ensure_loaded?(Phoenix.Channel) do
     the wire attributes falls back to a single authorized re-read by primary key
     (skipped for destroys, whose row is gone). Resources with no authorizers skip
     the check entirely.
+
+    ## A known, intentional staleness class: undecidable destroy notifications (L9)
+
+    `refetch_visible?/4`'s destroy clause always returns `false` — a destroy
+    notification whose read-policy filter can't be resolved from the wire
+    payload alone (`eval_filter/3` returns `:unknown`) is **dropped**, never
+    pushed to the subscriber. This is deliberate: the row is already gone, so
+    there is nothing left to re-read to prove the subscriber could see it —
+    pushing it anyway would risk leaking the existence of a row the actor's
+    policy can't confirm they were ever allowed to know about. The safe
+    direction here is silence, not disclosure.
+
+    The cost is a **stranded client cache**: a subscriber that never receives
+    this destroy keeps the row until something else forces a resync —
+    `AshRemote.Realtime`'s `:resubscribed`/`:join_denied` events (a genuine
+    connection gap), a later notification that happens to touch the same
+    record, or an application-level periodic refetch. There is currently no
+    dedicated signal for "a specific notification was silently dropped for
+    this reason" — `AshRemote.MultiDatalayer.LifecycleGuard` only reconciles
+    on the connection-level gap events above, not on this per-notification
+    drop (see `deferred-follow-ups.md` entry 9 in the fix tracker: closing
+    this gap needs a new realtime event type carrying `resource`/`tenant`/
+    `record_pk`, threaded from this channel through `AshRemote.Realtime` to
+    `LifecycleGuard` — deferred as a protocol change, not a bug fix).
+
+    **Client cache guidance**: an application relying on the local cache
+    staying exactly in sync should treat this as an accepted staleness
+    window bounded by its own resubscribe/refetch cadence, not assume every
+    destroy is guaranteed to arrive. A read-policy filter that only
+    references wire-carried attributes (the common case: simple equality/
+    ownership checks on the record's own fields) never hits this path at
+    all — `eval_filter/3` resolves those in-memory every time. This
+    condition is triggered specifically by policies that reference related
+    resources or context the wire payload doesn't carry.
     """
     use Phoenix.Channel
 
