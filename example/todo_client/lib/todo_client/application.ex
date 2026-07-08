@@ -25,8 +25,16 @@ defmodule TodoClient.Application do
           hydrate_spec(),
           # One websocket to todo_server, auto-joining a topic per `realtime?`
           # resource, carrying this instance's JWT as the connect token.
+          # echo: :deliver — this client runs TWO stacks over the same server
+          # resource (Remote.* ProvenCoverage cache + Local.* LocalOutbox).
+          # A write through one stack invalidates only that stack's caches
+          # locally; the broadcast echo is the only channel that reaches the
+          # sibling stack, so suppressing it would leave e.g. the online
+          # page's cache stale after this client's own offline-page write.
           {AshRemote.Realtime,
-           otp_app: :todo_client, connect_params: {TodoClient.Session, :connect_params, []}},
+           otp_app: :todo_client,
+           connect_params: {TodoClient.Session, :connect_params, []},
+           echo: :deliver},
           # Closes the notification-gap AshRemote.Realtime documents. Started
           # AFTER AshRemote.Realtime: the Lifecycle registry it registers with
           # is created by AshRemote.Realtime's own supervisor init, so it must
