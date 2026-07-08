@@ -102,6 +102,19 @@ defmodule AshRemote.Backend.Todo do
     calculate :deadline_echo, :date, expr(due_date) do
       public?(true)
     end
+
+    # L7-5: an EXPRESSION-based calc WITH an argument — unlike
+    # `title_with_prefix` above (a module calc, so it is never
+    # server-sortable at all, expression or not), this one has a real
+    # expression and so IS sortable server-side. `AshRemote.Expression.safe?`
+    # never mirrors a calc referencing `arg(...)` (it can't be reproduced as
+    # client-side data), so the generator always wraps this in `remote(...)`
+    # — exercising the exact expr(remote(name, %{args}, pk)) client shape a
+    # parameterized sort needs to preserve args through.
+    calculate :title_matches_target, :boolean, expr(title == ^arg(:target)) do
+      public?(true)
+      argument(:target, :string, allow_nil?: false, default: "")
+    end
   end
 
   actions do

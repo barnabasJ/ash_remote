@@ -123,4 +123,37 @@ defmodule AshRemote.RemoteLoadTest do
       |> Ash.read!()
     end
   end
+
+  # --- L7-5: sort on a parameterized remote() calc preserves its arguments ---
+
+  test "sort on a parameterized remote() calc preserves its arguments (order changes with the arg)" do
+    # `title_matches_target` IS expression-based (unlike `title_with_prefix`
+    # above), so the backend genuinely can sort on it — this isolates L7-5
+    # from the orthogonal "module calc isn't sortable at all" case.
+    _u = Ash.create!(mod(:User), %{name: "Ada", email: "ada@example.com"})
+    _a = Ash.create!(mod(:Todo), %{title: "Alpha"})
+    _b = Ash.create!(mod(:Todo), %{title: "Beta"})
+
+    by_alpha =
+      mod(:Todo)
+      |> Ash.Query.sort([{:title_matches_target, {%{target: "Alpha"}, :asc}}])
+      |> Ash.read!()
+      |> Enum.map(& &1.title)
+
+    by_beta =
+      mod(:Todo)
+      |> Ash.Query.sort([{:title_matches_target, {%{target: "Beta"}, :asc}}])
+      |> Ash.read!()
+      |> Enum.map(& &1.title)
+
+    # Unfixed: `Sort.encode/1` drops the calc's arguments entirely — both
+    # requests would silently evaluate `title_matches_target` with the SAME
+    # (default `target: ""`) argument, so `by_alpha` and `by_beta` would come
+    # back in the identical order regardless of which target was requested.
+    assert by_alpha != by_beta
+    # Ascending on a boolean sorts false before true — the matching record
+    # (== target) sorts last.
+    assert List.last(by_alpha) == "Alpha"
+    assert List.last(by_beta) == "Beta"
+  end
 end

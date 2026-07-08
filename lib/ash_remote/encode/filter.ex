@@ -74,7 +74,30 @@ defmodule AshRemote.Encode.Filter do
     # `filter_input` reads them from an `"input"` key alongside the operator.
     predicate = %{op => value(right)}
     predicate = maybe_put_input(predicate, ref)
-    %{to_string(field) => predicate}
+    leaf = %{to_string(field) => predicate}
+
+    # L7-4: a ref into a RELATED resource (`ref.relationship_path` non-empty,
+    # e.g. `user.name == "Ada"`) used to collapse to the bare leaf name —
+    # `%{"name" => %{"eq" => "Ada"}}` — silently dropping which resource
+    # "name" scopes to. Sent as-is, the backend would read that as a filter
+    # on THIS resource's own `name` field (wrong field entirely, or a
+    # spurious "no such field" if this resource has none) instead of the
+    # related one. Nest it under each relationship segment instead —
+    # `%{"user" => %{"name" => %{"eq" => "Ada"}}}` — which is the exact
+    # nested-map shape `Ash.Query.filter_input/2` already parses natively
+    # (relationship name → nested filter statement on the related
+    # resource), so no server-side change is needed to understand it.
+    nest_relationship_path(ref, leaf)
+  end
+
+  defp nest_relationship_path(%Ref{relationship_path: path}, predicate) when path in [nil, []] do
+    predicate
+  end
+
+  defp nest_relationship_path(%Ref{relationship_path: path}, predicate) do
+    Enum.reduce(Enum.reverse(path), predicate, fn segment, acc ->
+      %{to_string(segment) => acc}
+    end)
   end
 
   defp maybe_put_input(predicate, %Ref{attribute: %Ash.Query.Calculation{} = calc}) do

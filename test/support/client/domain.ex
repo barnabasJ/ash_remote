@@ -9,5 +9,6 @@ defmodule AshRemote.Client.Domain do
     resource(AshRemote.Client.Note)
     resource(AshRemote.Client.RaceItem)
     resource(AshRemote.Client.Singleton)
+    resource(AshRemote.Client.CompositeItem)
   end
 end

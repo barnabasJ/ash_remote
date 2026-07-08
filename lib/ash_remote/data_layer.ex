@@ -127,7 +127,8 @@ defmodule AshRemote.DataLayer do
         tenant: query.tenant
       })
 
-    with {:ok, response} <- request(cfg, :run, body, request_headers(query.context)),
+    with {:ok, response} <-
+           request(cfg, :run, body, request_headers(query.context), idempotent?: true),
          {:ok, data} <- Protocol.parse_run(response),
          {:ok, records} <- Decoder.decode_records(data, resource, plan, get?: get?(query)) do
       {:ok, records}
@@ -175,7 +176,8 @@ defmodule AshRemote.DataLayer do
         tenant: changeset.to_tenant
       })
 
-    with {:ok, response} <- request(cfg, :run, body, request_headers(changeset.context)),
+    with {:ok, response} <-
+           request(cfg, :run, body, request_headers(changeset.context), idempotent?: false),
          {:ok, _data} <- Protocol.parse_run(response) do
       :ok
     else
@@ -320,7 +322,8 @@ defmodule AshRemote.DataLayer do
         |> maybe_put(:primary_key, primary_key)
       )
 
-    with {:ok, response} <- request(cfg, :run, body, request_headers(changeset.context)),
+    with {:ok, response} <-
+           request(cfg, :run, body, request_headers(changeset.context), idempotent?: false),
          {:ok, data} <- Protocol.parse_run(response) do
       {:ok, Decoder.decode_record(data, resource, plan)}
     else
@@ -350,13 +353,22 @@ defmodule AshRemote.DataLayer do
 
   @doc """
   Fetches remote-calculation values for a set of records in ONE request:
-  `primary_key in pk_values`, selecting only the primary key plus the given
-  calculation specs (`%{name: atom, args: map}`). Returns
-  `{:ok, %{calc_name => %{pk_string => value}}}`.
+  every record's full primary key OR'd together, selecting only the primary
+  key attributes plus the given calculation specs (`%{name: atom, args:
+  map}`). Returns `{:ok, %{calc_name => %{pk_map => value}}}`, keyed by
+  `pk_wire_key/2`.
 
   Used by `AshRemote.RemoteCalculation` when rows were served without this
   data layer running (e.g. from a cache layer) — the whole requested bundle
   is fetched at once so sibling calculations share the round-trip.
+
+  `pk_values` is a list of full-primary-key maps (`Map.take(record,
+  primary_key)`-shaped) — L7-3: a single-attribute `[pk] =
+  Ash.Resource.Info.primary_key(resource)` destructure used to crash with
+  `MatchError` for any composite (multi-attribute) primary key. Keying by the
+  FULL primary key works identically for single- and multi-attribute PKs
+  (the same fix ash_multi_datalayer's L1 applied to its own aggregate-fold
+  paths — `Map.take/2` instead of a single-key match).
 
   `opts` accepts `:actor` and `:context` (the calculation's `source_context`
   — carries `ash_remote.headers` for explicit request headers) so the bundle
@@ -365,26 +377,26 @@ defmodule AshRemote.DataLayer do
   legitimate actor or (worse) computing values with no authorization
   context at all.
   """
-  @spec fetch_remote_calculations(module(), [term()], [map()], term(), keyword()) ::
-          {:ok, %{atom() => %{String.t() => term()}}} | {:error, term()}
+  @spec fetch_remote_calculations(module(), [map()], [map()], term(), keyword()) ::
+          {:ok, %{atom() => %{map() => term()}}} | {:error, term()}
   def fetch_remote_calculations(resource, pk_values, specs, tenant \\ nil, opts \\ []) do
     cfg = remote_config(resource)
-    [pk] = Ash.Resource.Info.primary_key(resource)
-    pk_key = to_string(pk)
-    filter = Ash.Filter.parse!(resource, [{pk, [in: pk_values]}])
+    primary_key = Ash.Resource.Info.primary_key(resource)
+    pk_fields = Enum.map(primary_key, &to_string/1)
+    filter = Ash.Filter.parse!(resource, or: pk_values)
 
     body =
       Protocol.build_run(%{
         resource: cfg.source,
         action: read_action_name(resource, cfg),
-        fields: [pk_key | Enum.map(specs, &calc_spec_field/1)],
+        fields: pk_fields ++ Enum.map(specs, &calc_spec_field/1),
         filter: Filter.encode(filter),
         tenant: tenant
       })
 
     headers = request_headers(bundle_request_context(opts))
 
-    with {:ok, response} <- request(cfg, :run, body, headers),
+    with {:ok, response} <- request(cfg, :run, body, headers, idempotent?: true),
          {:ok, data} <- Protocol.parse_run(response) do
       rows =
         case data do
@@ -398,13 +410,31 @@ defmodule AshRemote.DataLayer do
 
          {name,
           Map.new(rows, fn row ->
-            {to_string(row[pk_key]), Decoder.cast_calculation(resource, name, row[key])}
+            {pk_wire_key(row, primary_key), Decoder.cast_calculation(resource, name, row[key])}
           end)}
        end)}
     else
       {:error, errors} when is_list(errors) -> {:error, AshRemote.Error.to_ash_error(errors)}
       {:error, other} -> {:error, AshRemote.Error.Transport.normalize(other)}
     end
+  end
+
+  @doc """
+  A stable, string-keyed lookup key for a record's (or a wire row's) full
+  primary key, given `primary_key` (`Ash.Resource.Info.primary_key/1`'s
+  result) — same shape whichever side builds it: `Map.get(source, field)`
+  for a native record (atom keys) falls back to `Map.get(source,
+  to_string(field))` for a wire row (JSON-decoded, string keys), and every
+  value is stringified so both sides land on the identical map. Public so
+  `AshRemote.RemoteCalculation` can build the matching lookup key for a
+  fetched bundle from `fetch_remote_calculations/5`.
+  """
+  @spec pk_wire_key(map(), [atom()]) :: map()
+  def pk_wire_key(source, primary_key) do
+    Map.new(primary_key, fn field ->
+      value = Map.get(source, field, Map.get(source, to_string(field)))
+      {to_string(field), to_string(value)}
+    end)
   end
 
   # --- encode helpers ------------------------------------------------------
@@ -462,11 +492,59 @@ defmodule AshRemote.DataLayer do
 
   # --- transport / config --------------------------------------------------
 
-  defp request(cfg, path, body, extra_headers) do
+  # `opts[:idempotent?]` (required — every call site states it explicitly,
+  # deliberately no default) is L7-2: whatever `retry` the transport config
+  # carries (`Config.new(retry: ...)`, or a resource's declared transport) is
+  # meant for safely-retriable requests. A create/update/destroy POST is NOT
+  # idempotent — retrying one after a transient failure (timeout, connection
+  # reset) risks the backend having actually applied the first attempt,
+  # double-applying the write on retry (a duplicate create, a second
+  # decrement, etc.). Reads (`run_query/2`, `fetch_remote_calculations/5`)
+  # and the internal upsert-resolution read (`remote_identity_row/3`, itself
+  # a `run_query/2` call) are safe to retry and keep whatever policy the
+  # transport config declares; every write call site forces `retry: false`
+  # here regardless of that config, so a misconfigured shared transport can
+  # never silently make a write retriable.
+  defp request(cfg, path, body, extra_headers, opts) do
+    idempotent? = Keyword.fetch!(opts, :idempotent?)
     transport = Map.get(cfg, :transport) || Config.new(base_url: Map.fetch!(cfg, :base_url))
-    transport = %{transport | headers: transport.headers ++ extra_headers}
+    transport = %{transport | headers: merge_headers(transport.headers, extra_headers)}
+    transport = if idempotent?, do: transport, else: %{transport | retry: false}
     module = transport.module || Transport.Req
     module.request(transport, path, body)
+  end
+
+  # L7-1: the transport's static, configured headers (`Config.new(headers:
+  # ...)`, e.g. a fixed service token set once at config time) and this
+  # call's per-request headers (`request_headers/1` — the calling actor's
+  # forwarded token, or an explicit `context: %{ash_remote: %{headers:
+  # ...}}}` header) can both carry an `authorization` entry. Concatenating
+  # them naively (`transport.headers ++ extra_headers`, the old code) could
+  # hand the backend TWO `authorization` headers for one request — HTTP
+  # leaves multiple same-name headers ambiguous (different servers pick the
+  # first, the last, or reject the request outright), so this must be
+  # resolved on the client, case-insensitively (header names are
+  # case-insensitive per RFC 7230).
+  #
+  # Precedence: the per-request header wins. It is the more specific of the
+  # two — either the calling actor's own forwarded token or an explicit
+  # header the caller set for this exact call — while the transport-level
+  # header is just a static default with no idea who is actually calling. A
+  # stale static default silently overriding the real caller's identity is
+  # the more dangerous failure mode (the backend authorizes the request as
+  # the wrong principal, e.g. a shared service account instead of the
+  # signed-in user); the reverse (a static header the caller didn't expect
+  # to be overridden) is easy to avoid by simply not setting a per-request
+  # header when a fixed one is intended.
+  defp merge_headers(base, extra) do
+    extra_names = MapSet.new(extra, fn {name, _value} -> String.downcase(name) end)
+
+    kept_base =
+      Enum.reject(base, fn {name, _value} ->
+        MapSet.member?(extra_names, String.downcase(name))
+      end)
+
+    kept_base ++ extra
   end
 
   # H1: builds `request_headers/1`'s expected shape

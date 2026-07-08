@@ -9,6 +9,7 @@ defmodule AshRemote.Backend.Domain do
     resource(AshRemote.Backend.Note)
     resource(AshRemote.Backend.RaceItem)
     resource(AshRemote.Backend.Singleton)
+    resource(AshRemote.Backend.CompositeItem)
   end
 
   rpc do
@@ -55,6 +56,13 @@ defmodule AshRemote.Backend.Domain do
     end
 
     resource AshRemote.Backend.RaceItem do
+      expose(:read)
+      expose(:create)
+      expose(:update)
+      expose(:destroy)
+    end
+
+    resource AshRemote.Backend.CompositeItem do
       expose(:read)
       expose(:create)
       expose(:update)

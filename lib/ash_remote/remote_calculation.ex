@@ -24,8 +24,9 @@ defmodule AshRemote.RemoteCalculation do
     * **Bundled fetch**: when the rows came from elsewhere (a cache layer, or
       `Ash.load/2` on existing records), the FIRST remote calculation to run
       fetches the whole requested bundle — all remote calculations, all
-      records — in one request (`primary_key in [...]`), memoized for the
-      read so sibling calculations just pick out their column.
+      records — in one request (every record's full primary key OR'd
+      together), memoized for the read so sibling calculations just pick out
+      their column.
 
   No `expression/2` is defined on purpose: Ash therefore refuses filtering
   and sorting on these calculations (its native behaviour for Elixir
@@ -43,7 +44,11 @@ defmodule AshRemote.RemoteCalculation do
     name = Keyword.fetch!(opts, :calc)
     resource = hd(records).__struct__
     metadata_key = {:ash_remote_calc, name}
-    [pk] = Ash.Resource.Info.primary_key(resource)
+    # L7-3: `[pk] = Ash.Resource.Info.primary_key(resource)` crashed with
+    # MatchError for a composite (multi-attribute) primary key — key by the
+    # FULL primary key instead (`AshRemote.DataLayer.pk_wire_key/2`), which
+    # works identically for single- and multi-attribute PKs.
+    primary_key = Ash.Resource.Info.primary_key(resource)
 
     missing = Enum.reject(records, &prefetched?(&1, metadata_key))
 
@@ -53,7 +58,7 @@ defmodule AshRemote.RemoteCalculation do
          if prefetched?(record, metadata_key) do
            record.__metadata__[metadata_key]
          else
-           Map.get(fetched, to_string(Map.get(record, pk)))
+           Map.get(fetched, AshRemote.DataLayer.pk_wire_key(record, primary_key))
          end
        end)}
     end
@@ -68,8 +73,8 @@ defmodule AshRemote.RemoteCalculation do
   defp fetched_values(records, resource, name, context) do
     args = Map.new(context.arguments || %{})
     specs = bundle_specs(context, name, args)
-    [pk] = Ash.Resource.Info.primary_key(resource)
-    pk_values = Enum.map(records, &Map.get(&1, pk))
+    primary_key = Ash.Resource.Info.primary_key(resource)
+    pk_values = Enum.map(records, &Map.take(&1, primary_key))
     explicit_headers = get_in(context.source_context || %{}, [:ash_remote, :headers]) || %{}
 
     # H1 (pass-7 High + loop-1 review): the memo key must be actor- and

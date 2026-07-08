@@ -14,7 +14,12 @@ defmodule AshRemote.Protocol do
           optional(:fields) => list(),
           optional(:input) => map(),
           optional(:filter) => map(),
-          optional(:sort) => String.t(),
+          # L7-5: a list of sort entries — each a plain string ("field",
+          # "-field", ...) or, for a parameterized calculation, a map
+          # (`%{"field" => ..., "direction" => ..., "input" => ...}`); a
+          # legacy plain comma-joined string is also still accepted
+          # server-side.
+          optional(:sort) => String.t() | list(),
           optional(:page) => map(),
           optional(:primary_key) => map(),
           optional(:tenant) => String.t() | atom()

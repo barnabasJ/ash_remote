@@ -12,7 +12,7 @@ defmodule AshRemote.Server do
   request params.
 
       %{"resource" => module_string, "action" => action_name, "fields" => [...],
-        "input" => %{...}, "filter" => %{...}, "sort" => "...", "page" => %{...},
+        "input" => %{...}, "filter" => %{...}, "sort" => [...] | "...", "page" => %{...},
         "primary_key" => %{...}, "tenant" => ...}
       => %{"success" => true, "data" => ...}
        | %{"success" => false, "errors" => [%{"type","message","path"}]}
@@ -355,7 +355,7 @@ defmodule AshRemote.Server do
       resource
       |> Ash.Query.for_read(action.name, input, subject_opts(opts))
       |> maybe(&Ash.Query.filter_input/2, params["filter"])
-      |> maybe(&Ash.Query.sort_input/2, params["sort"])
+      |> maybe(&resolve_sort/2, params["sort"])
       |> Ash.Query.select(select)
       |> Ash.Query.load(load)
       |> apply_page(action, page_opts(params["page"]))
@@ -474,6 +474,69 @@ defmodule AshRemote.Server do
 
   defp maybe(subject, _fun, nil), do: subject
   defp maybe(subject, fun, arg), do: fun.(subject, arg)
+
+  # L7-5: `Ash.Query.sort_input/2` (native Ash) parses ONLY a comma-joined
+  # string or a list of already-Elixir-native sort terms — it has no wire
+  # shape for "sort by this calculation WITH these arguments" (a bare field
+  # name string has nowhere to carry them, and `Query.sort_input/2` doesn't
+  # expose `Ash.Sort.parse_input/3`'s `handler` callback that could inject
+  # them). `AshRemote.Encode.Sort` (client) emits a LIST whose entries are
+  # either plain strings (unchanged — forwarded straight through) or, for a
+  # parameterized calc, a `%{"field", "direction", "input"}` map — resolved
+  # here into the exact `{field, {input, direction}}` shape
+  # `Ash.Sort.parse_sort/4` already understands natively (the same shape a
+  # `handler`-provided calc-arg sort produces), so the resolved entry still
+  # flows through the ordinary `Ash.Query.sort_input/2` call below —
+  # including its field-policy scrubbing (`sort_input_indices`).
+  #
+  # A legacy plain string (the old wire shape, no args support at all) is
+  # passed straight through unchanged.
+  defp resolve_sort(query, sort) when is_binary(sort), do: Ash.Query.sort_input(query, sort)
+
+  defp resolve_sort(query, sort) when is_list(sort) do
+    resource = query.resource
+    Ash.Query.sort_input(query, Enum.map(sort, &resolve_sort_item(resource, &1)))
+  end
+
+  defp resolve_sort_item(_resource, item) when is_binary(item), do: item
+
+  defp resolve_sort_item(resource, %{"field" => field} = item) do
+    input = atomize_calc_args(resource, field, item["input"] || %{})
+    {field, {input, sort_direction(item["direction"])}}
+  end
+
+  # `Ash.Query.Calculation.from_resource_calculation/3` (reached via
+  # `Ash.Sort.parse_sort/4`) validates `:args` as a map through a Spark
+  # options schema that requires ATOM keys — the wire `"input"` map is
+  # JSON, so its keys are always strings. Resolve each key against the
+  # calculation's OWN declared argument names (a bounded, already-compiled
+  # allowlist) rather than interning arbitrary caller strings with
+  # `String.to_atom/1`; a key with no matching argument is left as-is and
+  # surfaces as an ordinary "no such input" error from Ash's own argument
+  # validation, same as it would for a fabricated atom.
+  defp atomize_calc_args(resource, field, input) do
+    case Ash.Resource.Info.calculation(resource, field) do
+      %{arguments: arguments} when is_list(arguments) ->
+        Map.new(input, fn {key, value} ->
+          case Enum.find(arguments, &(to_string(&1.name) == key)) do
+            %{name: name} -> {name, value}
+            nil -> {key, value}
+          end
+        end)
+
+      _ ->
+        input
+    end
+  end
+
+  @sort_directions ~w(asc desc asc_nils_first asc_nils_last desc_nils_first desc_nils_last)
+
+  # `dir` is checked against a fixed allowlist of strings that are always
+  # already-loaded atoms (they're Ash's own sort-order type, used throughout
+  # this module already) — safe to intern from wire input without risking
+  # atom-table exhaustion from arbitrary caller strings.
+  defp sort_direction(dir) when dir in @sort_directions, do: String.to_existing_atom(dir)
+  defp sort_direction(_), do: :asc
 
   defp resolve_resource(_otp_app, nil), do: {:error, :missing_resource}
 
