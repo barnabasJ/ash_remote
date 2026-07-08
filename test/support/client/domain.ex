@@ -8,5 +8,6 @@ defmodule AshRemote.Client.Domain do
     resource(AshRemote.Client.Comment)
     resource(AshRemote.Client.Note)
     resource(AshRemote.Client.RaceItem)
+    resource(AshRemote.Client.Singleton)
   end
 end

@@ -7,7 +7,7 @@ defmodule AshRemote.DataLayerTest do
   import Ash.Expr
 
   alias AshRemote.Backend.TestBackend
-  alias AshRemote.Client.{Comment, Todo, User}
+  alias AshRemote.Client.{Comment, Singleton, Todo, User}
 
   setup do
     TestBackend.reset!()
@@ -15,7 +15,8 @@ defmodule AshRemote.DataLayerTest do
     Application.put_env(:ash_remote, :remote_config, %{
       User => %{base_url: TestBackend.base_url(), source: "AshRemote.Backend.User"},
       Todo => %{base_url: TestBackend.base_url(), source: "AshRemote.Backend.Todo"},
-      Comment => %{base_url: TestBackend.base_url(), source: "AshRemote.Backend.Comment"}
+      Comment => %{base_url: TestBackend.base_url(), source: "AshRemote.Backend.Comment"},
+      Singleton => %{base_url: TestBackend.base_url(), source: "AshRemote.Backend.Singleton"}
     })
 
     on_exit(fn -> Application.delete_env(:ash_remote, :remote_config) end)
@@ -308,6 +309,31 @@ defmodule AshRemote.DataLayerTest do
       assert record.calculations[:due_date_probe] == nil
       # An uncastable value falls back to the raw wire value, never raises.
       assert record.aggregates[:avg_rating_probe] == "not-a-number"
+    end
+  end
+
+  # read_action_name/2 always targets the PRIMARY read action — a
+  # non-primary get_by-style action never actually reaches the server as
+  # get?: true over RPC. Singleton's PRIMARY read is itself declared
+  # get?: true, so this is the only fixture where a real round-trip
+  # exercises the server's single-object/explicit-null response shapes.
+  describe "M11: a genuine get?: true action over a real RPC round-trip" do
+    test "a hit decodes without crashing (the server sends a bare single object)" do
+      created = Ash.create!(Singleton, %{name: "only one"})
+
+      found = Ash.read_one!(Singleton)
+
+      # Unfixed: decode_records/3 had no clause for a bare map at all —
+      # FunctionClauseError out of run_query/2.
+      assert %Singleton{id: id} = found
+      assert id == created.id
+    end
+
+    test "a miss decodes without crashing (the server sends an explicit null)" do
+      # Unfixed: decode_records/3 had no clause for `nil` at all —
+      # FunctionClauseError out of run_query/2 for any get?/single-target
+      # read that misses.
+      assert nil == Ash.read_one!(Singleton)
     end
   end
 end

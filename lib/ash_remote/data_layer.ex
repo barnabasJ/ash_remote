@@ -128,13 +128,22 @@ defmodule AshRemote.DataLayer do
       })
 
     with {:ok, response} <- request(cfg, :run, body, request_headers(query.context)),
-         {:ok, data} <- Protocol.parse_run(response) do
-      {:ok, Decoder.decode_records(data, resource, plan)}
+         {:ok, data} <- Protocol.parse_run(response),
+         {:ok, records} <- Decoder.decode_records(data, resource, plan, get?: get?(query)) do
+      {:ok, records}
     else
       {:error, errors} when is_list(errors) -> {:error, AshRemote.Error.to_ash_error(errors)}
       {:error, other} -> {:error, AshRemote.Error.Transport.normalize(other)}
     end
   end
+
+  # M11: whether this read's action is declared `get?: true` (or `get_by`,
+  # which implies it) — the same signal the server uses
+  # (`AshRemote.Server.get?/2`'s first clause) to decide between a
+  # single-object and a list response shape. Determines how `nil`/a bare
+  # object in the response should be interpreted.
+  defp get?(%Query{context: %{action: %{get?: get?}}}), do: get? == true
+  defp get?(_query), do: false
 
   # --- writes --------------------------------------------------------------
 

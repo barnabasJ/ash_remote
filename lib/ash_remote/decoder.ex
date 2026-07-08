@@ -22,13 +22,66 @@ defmodule AshRemote.Decoder do
     {Enum.map(names, &to_string/1), Enum.map(names, &{to_string(&1), {:attribute, &1}})}
   end
 
-  @doc ~S'Decode a list (or `%{"results" => [...]}`) of wire records via `plan`.'
-  def decode_records(%{"results" => results}, resource, plan) do
-    Enum.map(results, &decode_record(&1, resource, plan))
+  @doc ~S"""
+  Decode a list (or `%{"results" => [...]}`) of wire records via `plan` into
+  `{:ok, [record]}` — the shape `Ash.DataLayer.run_query/2` must return
+  regardless of whether the underlying read was `get?`-style (Ash core does
+  its own get?-arity validation on the returned list afterward).
+
+  `opts[:get?]` (default `false`) — whether this read's action is declared
+  `get?: true` (or `get_by`, which implies it), the same signal
+  `AshRemote.Server`'s dispatch uses to decide the response shape (M11):
+
+    * a bare single object or explicit `nil` is legitimate ONLY for a
+      `get?` read (a hit decodes to a one-element list; a miss to `[]`);
+    * for an ordinary (non-`get?`) read, a bare object or `nil` is a
+      protocol violation (a list read must always get a list, `[]` for no
+      rows) — never silently accepted, always a typed `{:error, _}`
+      (`parse_run`'s own malformed-response case, `%{"success" => true}`
+      with no `data` key, is caught earlier and never reaches here).
+
+  Never raises — a malformed or malicious server response degrades to a
+  typed error instead of crashing the caller.
+  """
+  @spec decode_records(term(), module(), list(), keyword()) ::
+          {:ok, [struct()]} | {:error, [map()]}
+  def decode_records(data, resource, plan, opts \\ [])
+
+  def decode_records(%{"results" => results}, resource, plan, _opts) when is_list(results) do
+    {:ok, Enum.map(results, &decode_record(&1, resource, plan))}
   end
 
-  def decode_records(records, resource, plan) when is_list(records) do
-    Enum.map(records, &decode_record(&1, resource, plan))
+  def decode_records(records, resource, plan, _opts) when is_list(records) do
+    {:ok, Enum.map(records, &decode_record(&1, resource, plan))}
+  end
+
+  def decode_records(nil, _resource, _plan, opts) do
+    if Keyword.get(opts, :get?, false) do
+      {:ok, []}
+    else
+      {:error,
+       [
+         %{
+           "type" => "framework",
+           "message" => "expected a list response for a non-get? read, got an explicit null"
+         }
+       ]}
+    end
+  end
+
+  def decode_records(map, resource, plan, opts) when is_map(map) do
+    if Keyword.get(opts, :get?, false) do
+      {:ok, [decode_record(map, resource, plan)]}
+    else
+      {:error,
+       [
+         %{
+           "type" => "framework",
+           "message" =>
+             "expected a list response for a non-get? read, got a single object: #{inspect(map)}"
+         }
+       ]}
+    end
   end
 
   @doc "Decode a single wire record (string-keyed map) into a loaded struct via `plan`."

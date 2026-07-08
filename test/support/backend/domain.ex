@@ -8,6 +8,7 @@ defmodule AshRemote.Backend.Domain do
     resource(AshRemote.Backend.Comment)
     resource(AshRemote.Backend.Note)
     resource(AshRemote.Backend.RaceItem)
+    resource(AshRemote.Backend.Singleton)
   end
 
   rpc do
@@ -26,6 +27,17 @@ defmodule AshRemote.Backend.Domain do
       # H2: non-PK upsert identity tests need the update RPC path (an
       # upsert that resolves to "row exists" dispatches to update/2).
       expose(:update)
+    end
+
+    # M11: read_action_name/2 always targets the PRIMARY read action, so a
+    # non-primary get_by-style action (e.g. User's get_by_id) never
+    # actually reaches the server as get?: true over RPC — only a
+    # resource whose PRIMARY read is itself get?: true exercises the
+    # server's single-object/explicit-null response shapes.
+    resource AshRemote.Backend.Singleton do
+      expose(:read)
+      expose(:create)
+      expose(:destroy)
     end
 
     resource AshRemote.Backend.Comment do

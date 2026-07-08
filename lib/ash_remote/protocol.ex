@@ -60,7 +60,23 @@ defmodule AshRemote.Protocol do
   """
   @spec parse_run(map()) :: {:ok, term()} | {:error, [map()]}
   def parse_run(%{"success" => true, "data" => data}), do: {:ok, data}
-  def parse_run(%{"success" => true}), do: {:ok, nil}
+
+  # M11: `%{"success" => true}` with the `data` key ENTIRELY ABSENT is a
+  # different, malformed shape from `%{"success" => true, "data" => nil}`
+  # (an explicit null, e.g. a legitimate get?/single-target miss) — the
+  # clause above already matches the latter (Elixir map patterns match on
+  # key presence, not value); collapsing both to the same `{:ok, nil}`
+  # here (as this used to) makes the two indistinguishable downstream.
+  def parse_run(%{"success" => true} = response) do
+    {:error,
+     [
+       %{
+         "type" => "framework",
+         "message" => "malformed success response (no data key): #{inspect(response)}"
+       }
+     ]}
+  end
+
   def parse_run(%{"success" => false, "errors" => errors}), do: {:error, errors}
   def parse_run(other), do: {:error, [%{"type" => "framework", "message" => inspect(other)}]}
 

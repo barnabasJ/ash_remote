@@ -50,6 +50,18 @@ defmodule AshRemote.ProtocolTest do
       assert {:error, [%{"type" => "required"}]} =
                Protocol.parse_run(%{"success" => false, "errors" => [%{"type" => "required"}]})
     end
+
+    # M11: an explicit `data: null` (a legitimate get?/single-target miss)
+    # must stay distinguishable from `data` being entirely absent (a
+    # malformed success response) — collapsing both to the same {:ok, nil}
+    # makes the decoder unable to tell them apart downstream.
+    test "an explicit null data is a legitimate success" do
+      assert {:ok, nil} = Protocol.parse_run(%{"success" => true, "data" => nil})
+    end
+
+    test "a missing data key is a malformed response, not a legitimate null" do
+      assert {:error, [%{"type" => "framework"}]} = Protocol.parse_run(%{"success" => true})
+    end
   end
 
   describe "parse_validate/1" do
