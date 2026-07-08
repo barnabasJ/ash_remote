@@ -48,6 +48,36 @@ defmodule AshRemote.Server.Socket do
   For local development you can set
   `config :ash_remote, :dangerously_allow_all_subscriptions, true` to bypass the
   join gate entirely (logged, once). It does not bypass the per-record check.
+
+  ## Revocation is join-time-snapshot, not live (L13)
+
+  `AshRemote.Server.Channel`'s per-record read-policy filter (the "per-record
+  gate" above) is computed **once at join** and cached in the channel's own
+  socket assigns for that connection's lifetime — never re-evaluated against
+  a change in the actor's own authorization state (e.g. a deactivated user,
+  a revoked role, a tenant reassignment). A subscriber whose access was
+  revoked keeps receiving every broadcast their ORIGINAL join-time filter
+  matched until they disconnect, for exactly as long as their connection
+  stays open.
+
+  The default `id/1` returns `nil` — Phoenix's own signal that this socket
+  has **no identifier for `Phoenix.Endpoint.disconnect/3`
+  to target**, so there is no built-in way to force-disconnect a specific
+  user's live sockets from application code. This is the current, accepted
+  default: closing the gap would require overriding `id/1` (returning a
+  string derived from the connected actor, e.g. `"actor:\#{actor.id}"`) so
+  `MyAppWeb.Endpoint.disconnect(id, ...)` becomes callable when your
+  application detects a revocation, and calling it from wherever your app
+  performs the revocation (e.g. a user-deactivation action). `ash_remote`
+  does not do this automatically — it would mean tracking authorization
+  invalidation as a first-class concept this library doesn't otherwise have
+  (see `deferred-follow-ups.md` entry 5 for anything beyond this
+  documentation).
+
+  Until you override `id/1`, treat a subscription's authorization as valid
+  for the lifetime of its connection: any change that must take effect
+  immediately (not just on the next reconnect) needs the `id/1` override
+  above plus your own call to `disconnect/3` at revocation time.
   """
 
   @typedoc "Return `:ok`/`{:ok, socket}` to allow the subscription, anything else denies."
