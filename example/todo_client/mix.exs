@@ -37,7 +37,7 @@ defmodule TodoClient.MixProject do
       {:ash, "~> 3.29"},
       {:ash_phoenix, "~> 2.3"},
       {:ash_remote, path: "../.."},
-      {:ash_multi_datalayer, path: "../../../ash_multi_datalayer"},
+      {:ash_multi_datalayer, github: "barnabasJ/ash_multi_datalayer"},
       {:simple_sat, "~> 0.1"},
 
       # LocalOutbox offline stack: a local SQLite authority (ash_sqlite/

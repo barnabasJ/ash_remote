@@ -34,7 +34,7 @@ defmodule AshRemote.MixProject do
       # ash_remote client with ash_multi_datalayer's local authority. Optional so
       # downstream apps that don't layer a local cache/store skip it entirely; the
       # utilities runtime-check MDL and raise clearly if invoked without it.
-      {:ash_multi_datalayer, path: "../ash_multi_datalayer", optional: true},
+      {:ash_multi_datalayer, github: "barnabasJ/ash_multi_datalayer", optional: true},
       # Realtime transports — optional so downstream apps pull only their side
       # (server: phoenix + phoenix_pubsub; client: slipstream). Fetched here for
       # the library's own test suite (server socket/channel + client subscriber).
