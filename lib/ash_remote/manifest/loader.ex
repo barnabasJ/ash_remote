@@ -47,7 +47,26 @@ defmodule AshRemote.Manifest.Loader do
                  :create,
                  :update,
                  :destroy,
-                 :action
+                 :action,
+                 # AshRemote.Manifest.Field.aggregate_kind (L6 item 5) — every
+                 # aggregate kind `AshRemote.Gen`'s `aggregate_block/2` can
+                 # render as a call name (mirrors its own closed
+                 # `@aggregate_kinds` list). Before this was added, whether
+                 # `String.to_existing_atom("count")` (etc.) succeeded
+                 # depended on some *other* module having already referenced
+                 # that atom as a literal by the time a manifest loaded — true
+                 # by accident in most runs (Ash itself uses these atoms
+                 # elsewhere), but not guaranteed, exactly the R-8 boot-order
+                 # hazard this list exists to close.
+                 :count,
+                 :sum,
+                 :avg,
+                 :min,
+                 :max,
+                 :first,
+                 :list,
+                 :exists,
+                 :custom
                ] ++ Keyword.keys(Ash.Type.short_names())
 
   @doc false

@@ -22,7 +22,17 @@ defmodule AshRemote.Gen do
   backend resolves by name (filterable and sortable there).
   """
 
+  alias AshRemote.Gen.Identifier
   alias AshRemote.Manifest
+
+  # The full closed vocabulary of Ash aggregate kinds — mirrors
+  # `Mix.Tasks.AshRemote.Gen.@aggregate_calls`. `field.aggregate_kind` is
+  # rendered as a bare *function call name*, not an atom literal, so — unlike
+  # the `:#{name}`-style splices `Identifier.validate_name!/2` guards — an
+  # arbitrary-but-atom-shaped value isn't enough; it must be one of the
+  # specific calls `aggregates do ... end` actually supports (see
+  # `validate_aggregate_kind!/1`).
+  @aggregate_kinds ~w(count sum avg min max first list exists custom)a
 
   @doc """
   Generate module definitions from a manifest.
@@ -68,7 +78,11 @@ defmodule AshRemote.Gen do
     body =
       case type.kind do
         :enum ->
-          values = Enum.map_join(type.values, ", ", &":#{&1}")
+          values =
+            Enum.map_join(type.values, ", ", fn value ->
+              ":#{Identifier.validate_name!(value, "enum value")}"
+            end)
+
           "  use Ash.Type.Enum, values: [#{values}]"
 
         subtype ->
@@ -115,7 +129,12 @@ defmodule AshRemote.Gen do
   # regeneration: an existing module gets the entities it's missing, by name.
   defp resource_entities(res, ctx) do
     fk_names = belongs_to_fks(res)
-    pk = List.first(res.primary_key) || :id
+
+    pk =
+      case List.first(res.primary_key) do
+        nil -> :id
+        name -> Identifier.validate_name!(name, "primary key attribute name")
+      end
 
     attributes =
       res
@@ -128,7 +147,9 @@ defmodule AshRemote.Gen do
     relationships =
       res.relationships
       |> Enum.sort_by(fn {name, _} -> name end)
-      |> Enum.map(fn {name, rel} -> {String.to_atom(name), relationship_line(name, rel, ctx)} end)
+      |> Enum.map(fn {name, rel} ->
+        {String.to_atom(name), relationship_line(name, rel, res, ctx)}
+      end)
       |> Enum.reject(fn {_name, line} -> line == "" end)
 
     # Reproducible aggregates (relationship + optional mirrorable filter carried
@@ -138,7 +159,9 @@ defmodule AshRemote.Gen do
     {native_aggregates, calc_like} =
       res
       |> loadable_fields()
-      |> Enum.split_with(fn {_name, field} -> reproducible_aggregate?(field) end)
+      |> Enum.split_with(fn {_name, field} ->
+        reproducible_aggregate?(field, res.relationships)
+      end)
 
     calculations =
       Enum.map(calc_like, fn {name, field} ->
@@ -271,7 +294,7 @@ defmodule AshRemote.Gen do
   end
 
   defp attribute_line(name, field, ctx) do
-    atom = ":#{name}"
+    atom = ":#{Identifier.validate_name!(name, "attribute name")}"
 
     cond do
       field.primary_key? and primitive_kind(field.type) == :uuid ->
@@ -289,13 +312,22 @@ defmodule AshRemote.Gen do
     end
   end
 
-  defp relationship_line(name, rel, ctx) do
+  defp relationship_line(name, rel, res, ctx) do
+    name = Identifier.validate_name!(name, "relationship name")
     dest = client_module(rel.destination, ctx)
     attrs = relationship_attribute_opts(rel)
 
     case rel.type do
       :belongs_to ->
-        "belongs_to :#{name}, #{dest}, public?: true, attribute_writable?: true#{attrs}"
+        # L6 item 4: the FK attribute is deliberately excluded from the
+        # `attributes do` block (see `belongs_to_fks/1`) — Ash's own
+        # `belongs_to` auto-creates it, but only when the type/nullability
+        # the *backend*'s FK column actually has are threaded through here;
+        # otherwise Ash falls back to `attribute_type: :uuid, allow_nil?:
+        # true` regardless of what the manifest says, silently wrong for a
+        # non-uuid or non-nullable FK.
+        fk_opts = belongs_to_fk_opts(rel, name, res, ctx)
+        "belongs_to :#{name}, #{dest}, public?: true, attribute_writable?: true#{attrs}#{fk_opts}"
 
       :has_many ->
         "has_many :#{name}, #{dest}, public?: true#{attrs}"
@@ -315,13 +347,43 @@ defmodule AshRemote.Gen do
   defp relationship_attribute_opts(rel) do
     [source_attribute: rel.source_attribute, destination_attribute: rel.destination_attribute]
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
-    |> Enum.map_join(fn {key, value} -> ", #{key}: :#{value}" end)
+    |> Enum.map_join(fn {key, value} ->
+      ", #{key}: :#{Identifier.validate_name!(value, "relationship attribute name")}"
+    end)
+  end
+
+  # The manifest publishes the FK column as a normal attribute field (keyed by
+  # the same name `belongs_to_fks/1` excludes from `attributes do`) — look it
+  # up there for its real type/nullability. `nil` (a manifest that, unlike
+  # the reference backend, doesn't publish the FK as its own field) falls
+  # back to no explicit opts, i.e. Ash's own `:uuid`/`allow_nil?: true`
+  # default — the same fallback behavior as before this fix, just no longer
+  # silently wrong when the field data *is* available.
+  defp belongs_to_fk_opts(rel, name, res, ctx) do
+    fk_name = rel.source_attribute || "#{name}_id"
+
+    case Map.get(res.fields, fk_name) do
+      %{kind: :attribute} = field ->
+        allow_nil? = field.allow_nil? != false
+        ", attribute_type: #{render_type(field.type, ctx)}, allow_nil?: #{allow_nil?}"
+
+      _ ->
+        ""
+    end
   end
 
   defp calculation_block(name, field, pk, ctx) do
+    name = Identifier.validate_name!(name, "calculation name")
+
     args =
       Enum.map_join(field.arguments, "\n", fn arg ->
-        "      argument :#{arg.name}, #{render_type(arg.type, ctx)}, allow_nil?: true"
+        arg_name = Identifier.validate_name!(arg.name, "calculation argument name")
+        # L6 item 3: the manifest's own nullability, not a hardcoded `true` —
+        # an argument the backend actually requires (e.g. `allow_nil? false`)
+        # must be rejected client-side too, not silently accepted as nil and
+        # sent to the backend to fail there instead.
+        allow_nil? = arg.allow_nil? != false
+        "      argument :#{arg_name}, #{render_type(arg.type, ctx)}, allow_nil?: #{allow_nil?}"
       end)
 
     inner = "      public? true" <> if(args == "", do: "", else: "\n" <> args)
@@ -341,7 +403,8 @@ defmodule AshRemote.Gen do
         true ->
           arg_map =
             Enum.map_join(field.arguments, ", ", fn arg ->
-              ~s|"#{arg.name}" => arg(:#{arg.name})|
+              arg_name = Identifier.validate_name!(arg.name, "calculation argument name")
+              ~s|"#{arg_name}" => arg(:#{arg_name})|
             end)
 
           ~s|expr(remote("#{name}", %{#{arg_map}}, #{pk}))|
@@ -362,26 +425,68 @@ defmodule AshRemote.Gen do
   # `AshRemote.Expression.safe?` here even though a legitimate server only
   # ever publishes filters that already passed this gate, exactly as the
   # calculation path re-verifies `field.expression` below.
-  defp reproducible_aggregate?(%{kind: :aggregate, relationship: relationship} = field)
+  #
+  # L6 item 6: a relationship name alone isn't enough — the aggregate is only
+  # reproducible if that relationship is one the generator will *actually
+  # emit* into `relationships do`. Two ways it might not be, both silent
+  # otherwise: `relationship_line/4` doesn't support `:many_to_many` at all
+  # (its catch-all clause drops it, emitting nothing), and the manifest may
+  # simply not carry a relationship by that name (e.g. private, so never
+  # published — `Ash.Info.Manifest` only publishes public relationships).
+  # Either way, without this check `aggregate_block/2` would render
+  # `count :x, :some_ref do ... end` against a relationship that doesn't
+  # exist on the generated resource — uncompilable — instead of falling back
+  # to the always-safe `remote(...)` proxy calc.
+  defp reproducible_aggregate?(
+         %{kind: :aggregate, relationship: relationship} = field,
+         relationships
+       )
        when not is_nil(relationship) do
     filter = Map.get(field, :aggregate_filter)
-    is_nil(filter) or AshRemote.Expression.safe?(filter)
+
+    emitted_relationship?(relationships, relationship) and
+      (is_nil(filter) or AshRemote.Expression.safe?(filter))
   end
 
-  defp reproducible_aggregate?(_field), do: false
+  defp reproducible_aggregate?(_field, _relationships), do: false
+
+  @emitted_relationship_types [:belongs_to, :has_many, :has_one]
+
+  defp emitted_relationship?(relationships, name) do
+    case Map.get(relationships, name) do
+      %{type: type} -> type in @emitted_relationship_types
+      nil -> false
+    end
+  end
+
+  defp validate_aggregate_kind!(kind) when kind in @aggregate_kinds, do: kind
+
+  defp validate_aggregate_kind!(kind) do
+    raise AshRemote.Gen.InvalidManifestError,
+      message:
+        "manifest aggregate kind #{inspect(kind)} is not one of the supported aggregate " <>
+          "calls #{inspect(@aggregate_kinds)}"
+  end
 
   # A native client aggregate: `count :name, :relationship [, :field] do ... end`
   # (with the sum/avg field arg only when present, and a mirrored filter when
   # the server carried one). A caching data layer can fold this from the related
   # rows instead of round-tripping to the server.
   defp aggregate_block(name, field) do
-    field_arg = if field.aggregate_field, do: ", :#{field.aggregate_field}", else: ""
+    name = Identifier.validate_name!(name, "aggregate name")
+    relationship = Identifier.validate_name!(field.relationship, "aggregate relationship name")
+    kind = validate_aggregate_kind!(field.aggregate_kind)
+
+    field_arg =
+      if field.aggregate_field,
+        do: ", :#{Identifier.validate_name!(field.aggregate_field, "aggregate field name")}",
+        else: ""
 
     filter_line =
       if field.aggregate_filter, do: "\n      filter expr(#{field.aggregate_filter})", else: ""
 
     """
-        #{field.aggregate_kind} :#{name}, :#{field.relationship}#{field_arg} do
+        #{kind} :#{name}, :#{relationship}#{field_arg} do
           public? true#{filter_line}
         end
     """
@@ -393,7 +498,14 @@ defmodule AshRemote.Gen do
     "  actions do\n#{Enum.join(blocks, "\n\n")}\n  end"
   end
 
-  defp action_block(%{type: :read} = action, _res) do
+  # Action names are validated once, here, regardless of which action-type
+  # clause below ends up interpolating `action.name` raw.
+  defp action_block(action, res) do
+    Identifier.validate_name!(action.name, "action name")
+    do_action_block(action, res)
+  end
+
+  defp do_action_block(%{type: :read} = action, _res) do
     opts =
       [
         primary?(action),
@@ -407,13 +519,13 @@ defmodule AshRemote.Gen do
     "    read :#{action.name} do\n#{opts}\n    end"
   end
 
-  defp action_block(%{type: :create} = action, res) do
+  defp do_action_block(%{type: :create} = action, res) do
     accept = accept_line(action, res)
 
     "    create :#{action.name} do\n#{compact_lines([primary?(action), accept])}\n    end"
   end
 
-  defp action_block(%{type: :update} = action, res) do
+  defp do_action_block(%{type: :update} = action, res) do
     lines =
       compact_lines([
         primary?(action),
@@ -425,12 +537,12 @@ defmodule AshRemote.Gen do
     "    update :#{action.name} do\n#{lines}\n    end"
   end
 
-  defp action_block(%{type: :destroy} = action, _res) do
+  defp do_action_block(%{type: :destroy} = action, _res) do
     lines = compact_lines([primary?(action), "    require_atomic? false"])
     "    destroy :#{action.name} do\n#{lines}\n    end"
   end
 
-  defp action_block(%{type: :action, name: name}, _res) do
+  defp do_action_block(%{type: :action, name: name}, _res) do
     "    # generic action #{inspect(name)} not yet supported by ash_remote codegen"
   end
 
@@ -443,6 +555,9 @@ defmodule AshRemote.Gen do
       |> Enum.filter(&MapSet.member?(attr_names, &1))
       |> Enum.map(&String.to_atom/1)
 
+    # Rendered via `inspect/1`, not raw interpolation, so this is already
+    # injection-safe regardless of what an accepted name contains — `inspect`
+    # on a list of atoms always produces valid, self-escaping Elixir source.
     "    accept #{inspect(accepted)}"
   end
 
@@ -489,10 +604,19 @@ defmodule AshRemote.Gen do
     |> Enum.sort_by(fn {name, _} -> name end)
   end
 
+  # L6 item 4 (a preexisting bug this fix also closes): `rel.source_attribute`
+  # is a *string* (manifest data) when present, but the `|| String.to_atom(...)`
+  # fallback only ran for the nil case — so this returned a list mixing
+  # strings and atoms, and `String.to_atom(name) in fk_names` at the call site
+  # (an atom-only membership check) silently never matched a present
+  # `source_attribute`, i.e. the FK exclusion this function exists for was
+  # inert whenever the manifest actually carries `source_attribute` (which,
+  # from `AshRemote.Server.inject_relationship_attributes/2`, is always). Both
+  # sides now consistently deal in atoms.
   defp belongs_to_fks(res) do
     res.relationships
     |> Enum.filter(fn {_name, rel} -> rel.type == :belongs_to end)
-    |> Enum.map(fn {name, rel} -> rel.source_attribute || String.to_atom("#{name}_id") end)
+    |> Enum.map(fn {name, rel} -> String.to_atom(rel.source_attribute || "#{name}_id") end)
   end
 
   # --- type rendering ------------------------------------------------------
@@ -532,7 +656,16 @@ defmodule AshRemote.Gen do
 
   # --- module naming -------------------------------------------------------
 
+  # The single validation point for every manifest-sourced module name:
+  # resource modules, type modules, and relationship destinations all funnel
+  # through here. Validating the raw `backend_module` string (every
+  # dot-segment a safe Elixir alias component) closes both the `defmodule
+  # #{module} do` injection point and — since `Macro.underscore/1` of a
+  # validated alias can never contain a `/` or `..` — the file-path
+  # derivation in `Mix.Tasks.AshRemote.Gen.output_path/2`.
   defp client_module(backend_module, ctx) do
+    Identifier.validate_module!(backend_module, "module name")
+
     rest =
       backend_module
       |> String.split(".")

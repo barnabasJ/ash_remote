@@ -79,10 +79,44 @@ defmodule Mix.Tasks.AshRemote.Gen do
         |> ensure_entities(module, definition)
         |> reconcile_drift(module, definition, interactive?)
       else
-        path = Path.join(output, Macro.underscore(definition.module) <> ".ex")
-        Igniter.create_new_file(igniter, path, definition.source)
+        Igniter.create_new_file(
+          igniter,
+          output_path(output, definition.module),
+          definition.source
+        )
       end
     end)
+  end
+
+  # `AshRemote.Gen.generate/2` already refuses (via `AshRemote.Gen.Identifier`)
+  # any manifest module name whose `Macro.underscore/1` could contain a `/` or
+  # `..`, so `definition.module` reaching this function is never
+  # attacker-controlled in practice. `assert_contained!/3` is the
+  # belt-and-suspenders second layer the L6 task spec asks for regardless:
+  # an explicit, independently-testable assertion that the resolved path
+  # never escapes `output`, so a future change to either the identifier
+  # validator or `Macro.underscore/1` itself can't silently reopen the gap.
+  # `@doc false` (not `defp`) purely so tests can call these directly.
+  @doc false
+  def output_path(output, module) do
+    path = Path.join(output, Macro.underscore(module) <> ".ex")
+    :ok = assert_contained!(output, path, module)
+    path
+  end
+
+  @doc false
+  def assert_contained!(output, path, module) do
+    root = Path.expand(output)
+    resolved = Path.expand(path)
+
+    if resolved == root or String.starts_with?(resolved, root <> "/") do
+      :ok
+    else
+      raise AshRemote.Gen.InvalidManifestError,
+        message:
+          "generated path #{inspect(path)} (from module #{inspect(module)}) escapes the " <>
+            "configured output root #{inspect(output)}"
+    end
   end
 
   # Existing modules are never rewritten — the manifest's entities are ensured
