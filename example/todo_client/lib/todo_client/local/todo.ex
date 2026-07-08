@@ -76,10 +76,15 @@ defmodule TodoClient.Local.Todo do
     attribute(:public, :boolean, public?: true, default: false)
     attribute(:priority, TodoClient.Remote.Priority, public?: true, default: :medium)
     attribute(:due_date, :date, public?: true)
-    attribute(:inserted_at, :utc_datetime_usec, public?: true)
+    # Server-assigned, hydration-only — writable?: false so a LocalOutbox
+    # flush's replicated write never sends it as wire input (the remote
+    # rejects it: "is currently writable?: false"). Hydration still writes
+    # it via force_change_attribute/3, which bypasses writability.
+    attribute(:inserted_at, :utc_datetime_usec, public?: true, writable?: false)
     # Plain display attribute holding the server's value (carried by hydration);
-    # no longer the conflict field (see the moduledoc).
-    attribute(:updated_at, :utc_datetime_usec, public?: true)
+    # no longer the conflict field (see the moduledoc). writable?: false for the
+    # same reason as inserted_at above.
+    attribute(:updated_at, :utc_datetime_usec, public?: true, writable?: false)
     # The conflict field — a client-authored monotonic counter (see
     # `TodoClient.BumpVersion`). Carried on the wire so the flush pushes it and
     # the server stores it verbatim.

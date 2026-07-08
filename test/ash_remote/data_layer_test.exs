@@ -197,6 +197,31 @@ defmodule AshRemote.DataLayerTest do
       assert upserted.name == "Ada v2"
     end
 
+    test "a replicated write never sends a writable?: false attribute other than the PK as wire input" do
+      Ash.create!(User, %{name: "Ada", email: "ada@example.com"})
+
+      # Found live via the offline-first demo (FINAL gate 2): a LocalOutbox
+      # flush hydrates its local snapshot with every attribute, including
+      # writable?: false ones (User.updated_at here; a real resource's
+      # inserted_at/updated_at in the demo). accepted_keys/1's H2
+      # replicated-write clause only excluded the primary key, so
+      # updated_at (present in changeset.attributes from the hydrated
+      # snapshot) was sent as wire input, and the remote correctly rejected
+      # it: "No such input `updated_at` for action ... currently
+      # writable?: false". Every non-writable attribute must be excluded
+      # here, not just the PK.
+      upserted =
+        User
+        |> Ash.Changeset.for_create(:upsert_by_email, %{
+          name: "Ada v2",
+          email: "ada@example.com"
+        })
+        |> Ash.Changeset.force_change_attribute(:updated_at, DateTime.utc_now())
+        |> Ash.create!()
+
+      assert upserted.name == "Ada v2"
+    end
+
     test "an ordinary action-driven update still respects its own accept list" do
       existing = Ash.create!(User, %{name: "Ada", email: "ada@example.com"})
 

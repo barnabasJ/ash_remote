@@ -454,14 +454,25 @@ defmodule AshRemote.DataLayer do
   # clause below, but a REPLICATED write can still carry a real,
   # accept-narrowed action once `put_write_action/3,4` resolves one).
   defp accepted_keys(%{context: %{private: %{ash_remote_replicated_write?: true}}} = changeset) do
-    # The primary key is never wire "input" — it's addressed via the
-    # separate `primary_key` protocol field (`write/5`) and the remote
-    # correctly rejects it as an input attribute (`writable?: false`).
-    # `changeset.attributes` always carries it (a fresh create's lazy uuid
-    # default lands there even though the attribute itself isn't
-    # user-writable), so it must be excluded here explicitly.
-    pk = Ash.Resource.Info.primary_key(changeset.resource)
-    changeset.attributes |> Map.keys() |> Enum.reject(&(&1 in pk))
+    # Neither the primary key NOR any other `writable?: false` attribute
+    # (e.g. auto-managed `inserted_at`/`updated_at` timestamps) is valid
+    # wire input — the remote correctly rejects any of them as an input
+    # attribute for its resolved action ("No such input `X` ... is
+    # currently writable?: false"). `changeset.attributes` carries every
+    # attribute the local snapshot had a value for, including these (a
+    # fresh create's lazy uuid default lands there even though the PK
+    # isn't user-writable; a hydrated snapshot's timestamps land there the
+    # same way) — so all non-writable attributes must be excluded here
+    # explicitly, not just the PK.
+    unwritable =
+      changeset.resource
+      |> Ash.Resource.Info.attributes()
+      |> Enum.reject(& &1.writable?)
+      |> Enum.map(& &1.name)
+      |> MapSet.new()
+      |> MapSet.union(MapSet.new(Ash.Resource.Info.primary_key(changeset.resource)))
+
+    changeset.attributes |> Map.keys() |> Enum.reject(&(&1 in unwritable))
   end
 
   defp accepted_keys(%{action: %{accept: accept}}) when is_list(accept), do: accept

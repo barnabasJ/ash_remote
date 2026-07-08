@@ -14,6 +14,10 @@ defmodule AshRemote.Backend.User do
 
     attribute(:name, :string, public?: true, allow_nil?: false)
     attribute(:email, :string, public?: true)
+    # A `writable?: false`, non-PK attribute — mirrors a real resource's
+    # auto-managed `inserted_at`/`updated_at`, for the H2 replicated-write
+    # accepted_keys/1 regression test below.
+    update_timestamp(:updated_at, public?: true)
   end
 
   identities do
