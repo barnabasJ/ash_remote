@@ -146,4 +146,55 @@ defmodule AshRemote.MultiDatalayer.LifecycleGuardTest do
 
     assert Coverage.entries(CachedThing, nil) == []
   end
+
+  # R0 #26: landed but untested — LifecycleGuard.init/1 monitors the
+  # registry process and handle_info({:DOWN, ...}) re-calls
+  # listen_lifecycle/1 (== monitor_registry/1) to re-register with whatever
+  # NEW registry instance the supervisor restarts in its place. Prove the
+  # guard survives a registry crash+restart, not just its initial wiring.
+  test "surviving a registry crash: the guard re-monitors and re-registers with the restarted registry" do
+    {:ok, _} = AshRemote.Realtime.start_link(resources: [], name: __MODULE__.RealtimeRestart)
+    {:ok, pid} = LifecycleGuard.start_link(realtime_names: [__MODULE__.RealtimeRestart])
+
+    registry = Module.concat(__MODULE__.RealtimeRestart, Lifecycle)
+    assert is_pid(Process.whereis(registry))
+
+    Ash.create!(CachedThing, %{name: "foo"})
+    warm(Ash.Query.filter(CachedThing, name == "foo"))
+    assert Coverage.entries(CachedThing, nil) != []
+
+    # Drive handle_info({:DOWN, ...}) directly, the same way the other tests
+    # in this file drive handle_info/2 directly via send/2 rather than a
+    # real process crash (a real Process.exit/2 kill risks cascading through
+    # AshRemote.Realtime's own supervision tree in ways unrelated to what
+    # this test is actually about). Pull the guard's real monitor ref for
+    # this name out of its own state so the :DOWN message matches exactly
+    # what a genuine registry crash would deliver.
+    %{refs: refs_before} = :sys.get_state(pid)
+
+    {ref, __MODULE__.RealtimeRestart} =
+      Enum.find(refs_before, fn {_ref, n} -> n == __MODULE__.RealtimeRestart end)
+
+    send(pid, {:DOWN, ref, :process, Process.whereis(registry), :killed})
+    :sys.get_state(pid)
+
+    # The guard must have dropped the old ref and established a NEW
+    # monitor for the same name (monitor_registry/1's re-registration) —
+    # proving it doesn't just silently lose track of this name forever.
+    %{refs: refs_after} = :sys.get_state(pid)
+    refute Map.has_key?(refs_after, ref)
+    assert Enum.any?(refs_after, fn {_ref, n} -> n == __MODULE__.RealtimeRestart end)
+
+    # And the guard is still live and correctly wired: a real event through
+    # the (still-running) registry reaches it.
+    event = %Event{type: :resubscribed, resource: CachedThing, tenant: nil}
+
+    Registry.dispatch(registry, :lifecycle, fn entries ->
+      for {entry_pid, _} <- entries, do: send(entry_pid, {AshRemote.Realtime, event})
+    end)
+
+    :sys.get_state(pid)
+
+    assert Coverage.entries(CachedThing, nil) == []
+  end
 end

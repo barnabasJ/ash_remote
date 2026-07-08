@@ -69,6 +69,16 @@ defmodule AshRemote.Manifest.LoaderTest do
     assert {:error, {:unsupported_schema_version, "2.0.0"}} = Loader.load(tmp)
   end
 
+  # R0: landed but untested — a non-string schema_version (e.g. a malformed
+  # or malicious manifest sending a bare number) must return the same typed
+  # {:unsupported_schema_version, _} error, not crash inside String.split/2
+  # (which raises on a non-binary argument).
+  test "rejects a non-string schema version with a typed error, not a crash" do
+    tmp = Path.join(System.tmp_dir!(), "bad_manifest_numeric_version.json")
+    File.write!(tmp, Jason.encode!(%{"schema_version" => 2, "resources" => []}))
+    assert {:error, {:unsupported_schema_version, 2}} = Loader.load(tmp)
+  end
+
   # B2: the loader is a pass-through for `aggregate_filter` — it neither
   # evaluates nor safety-rejects it (that decision lives in `AshRemote.Gen`,
   # the single safety gate, mirroring how `expression` is handled). A crafted

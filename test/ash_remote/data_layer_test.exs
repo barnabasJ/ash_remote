@@ -336,4 +336,21 @@ defmodule AshRemote.DataLayerTest do
       assert nil == Ash.read_one!(Singleton)
     end
   end
+
+  # R0 #11: landed but untested — an always-false filter (query.filter ==
+  # false, or an %Ash.Filter{expression: false} — the normalized shape a
+  # provably-unsatisfiable filter, e.g. `filter(1 == 2)`, reduces to)
+  # short-circuits to {:ok, []} in run_query/2 without ever sending a
+  # request. Proven by pointing the client at an UNREACHABLE backend and
+  # confirming the read still succeeds (transport_error_surfacing_test.exs
+  # confirms an unreachable backend otherwise surfaces a typed
+  # AshRemote.Error.Transport for any REAL request) — the only way it can
+  # succeed here is if no request was ever attempted.
+  test "R0 #11: an always-false filter short-circuits locally, without sending a request" do
+    Application.put_env(:ash_remote, :remote_config, %{
+      Todo => %{base_url: "http://127.0.0.1:1", source: "AshRemote.Backend.Todo"}
+    })
+
+    assert [] = Todo |> Ash.Query.filter(1 == 2) |> Ash.read!()
+  end
 end

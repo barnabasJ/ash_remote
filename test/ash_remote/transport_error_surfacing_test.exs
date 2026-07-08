@@ -31,4 +31,32 @@ defmodule AshRemote.TransportErrorSurfacingTest do
     assert %Ash.Error.Unknown{} = error
     assert Enum.any?(error.errors, &match?(%AshRemote.Error.Transport{}, &1))
   end
+
+  # R0 #9: landed but untested — 401/403 taxonomy. A raw HTTP 401/403 (e.g. a
+  # proxy/gateway rejecting the request before it reaches the ash_remote
+  # server at all, so there's no typed JSON error body to decode) must
+  # normalize to Ash.Error.Forbidden.Policy — the same :auth classification
+  # a Forbidden wrapped inside a typed body gets — not fall through to the
+  # generic Transport error, which ash_multi_datalayer's LocalOutbox
+  # Flush.classify/1 treats as :transient (retry, wrong for an auth
+  # failure that won't self-heal by retrying).
+  describe "AshRemote.Error.Transport.normalize/1 — 401/403 taxonomy" do
+    alias AshRemote.Error.Transport
+
+    test "401 normalizes to Ash.Error.Forbidden.Policy, not the generic Transport error" do
+      assert %Ash.Error.Forbidden.Policy{} = Transport.normalize({:http_error, 401, "nope"})
+    end
+
+    test "403 normalizes to Ash.Error.Forbidden.Policy, not the generic Transport error" do
+      assert %Ash.Error.Forbidden.Policy{} = Transport.normalize({:http_error, 403, "nope"})
+    end
+
+    test "other HTTP error statuses (e.g. 500) still become the generic typed Transport error" do
+      assert %Transport{status: 500} = Transport.normalize({:http_error, 500, "boom"})
+    end
+
+    test "a transport-level failure (connection refused) still becomes a Transport error, unaffected" do
+      assert %Transport{status: nil} = Transport.normalize({:transport_error, :econnrefused})
+    end
+  end
 end
