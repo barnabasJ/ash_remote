@@ -76,11 +76,12 @@ notification at all) calls `AshMultiDatalayer.forget!/3` /
 ## Run it
 
 ```sh
-./run.sh          # online cache demo: two users, live cross-client invalidation
-./run_offline.sh  # offline-first demo: two clients, offline edits + conflict UI
+./run.sh   # both users, both demos — each client serves `/` and `/offline`
 ```
 
-`run.sh` — open both pages, then:
+Open both pages (Ada + Grace). Each client instance serves two demos:
+
+**`/` — the ProvenCoverage cache demo:**
 
 1. On Grace's page, click through the Browse panel's status/priority tabs on one
    list. Watch the sticky cache bar: the first click on each filter is a
@@ -97,10 +98,10 @@ notification at all) calls `AshMultiDatalayer.forget!/3` /
    for that resource (not silently stale data), then fresh misses/backfills.
 5. Add a **public** list/todo on either page → it appears live on both.
 
-`run_offline.sh` — the LocalOutbox `/offline` page: toggle offline, edit
-local-first while queued in the outbox, and resolve a stale-check conflict with
-the three-way (Keep mine / Take theirs / Retry) UI. The `/oban` page shows the
-outbox flush jobs draining.
+**`/offline` — the LocalOutbox demo:** toggle offline, edit local-first while
+queued in the outbox, then go back online and resolve a stale-check conflict
+with the three-way (Keep mine / Take theirs / Retry) UI. The `/oban` page shows
+the outbox flush jobs draining.
 
 ## Automated tests
 

@@ -4,7 +4,7 @@ defmodule TodoClient.OfflineLive do
   LocalOutbox stack). Reads are served from local SQLite (0 RPC); writes commit
   locally and drain to the server through the Oban-backed outbox.
 
-  Drive it with two instances (see `run_offline.sh`):
+  Drive it with two instances (see `../run.sh`):
 
     1. Both pages show the same shared (public) todo, hydrated from the server.
     2. Hit **Go offline** on both — `LocalOutbox.pause_sync/1` pauses the flush
