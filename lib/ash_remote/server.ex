@@ -412,8 +412,17 @@ defmodule AshRemote.Server do
 
   # Ash subject opts (actor/tenant/context) resolved from the request and
   # threaded into every action so authorization and multitenancy apply.
+  #
+  # L8: `authorize?: true` is explicit and non-negotiable here — without it,
+  # a domain configured `authorize :when_requested` runs every anonymous RPC
+  # UNAUTHORIZED (Ash only enforces policies on such a domain when the
+  # caller opts in per-call). This is the single shared helper `dispatch/4`
+  # (read/create/update/destroy), `fetch!/3` (the update/destroy primary-key
+  # fetch), AND `validate_action/3` (`/rpc/validate`) all route their
+  # Ash.Query/Ash.Changeset subject through — fixing it here fixes every
+  # server-side Ash call in one place, not just the read path.
   defp subject_opts(opts) do
-    [actor: opts[:actor], tenant: opts[:tenant], context: opts[:context]]
+    [actor: opts[:actor], tenant: opts[:tenant], context: opts[:context], authorize?: true]
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
   end
 
