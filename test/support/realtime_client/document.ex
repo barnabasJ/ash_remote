@@ -7,7 +7,6 @@ defmodule AshRemote.RealtimeClient.Document do
   use Ash.Resource,
     domain: AshRemote.RealtimeClient.Domain,
     data_layer: AshRemote.DataLayer,
-    extensions: [AshRemote.Resource],
     notifiers: [AshRemote.RealtimeClient.CaptureNotifier]
 
   remote do

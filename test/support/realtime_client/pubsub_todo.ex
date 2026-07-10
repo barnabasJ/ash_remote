@@ -8,7 +8,6 @@ defmodule AshRemote.RealtimeClient.PubSubTodo do
   use Ash.Resource,
     domain: AshRemote.RealtimeClient.Domain,
     data_layer: AshRemote.DataLayer,
-    extensions: [AshRemote.Resource],
     notifiers: [Ash.Notifier.PubSub]
 
   remote do

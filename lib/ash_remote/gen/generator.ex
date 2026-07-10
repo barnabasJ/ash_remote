@@ -111,8 +111,7 @@ defmodule AshRemote.Gen do
       defmodule #{module} do
         use Ash.Resource,
           domain: #{ctx.domain},
-          data_layer: AshRemote.DataLayer,
-          extensions: [AshRemote.Resource]
+          data_layer: AshRemote.DataLayer
 
       #{remote}
 

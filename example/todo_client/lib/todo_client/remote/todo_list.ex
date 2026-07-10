@@ -8,7 +8,7 @@ defmodule TodoClient.Remote.TodoList do
   use Ash.Resource,
     domain: TodoClient.Remote.Domain,
     data_layer: AshMultiDatalayer.DataLayer,
-    extensions: [AshRemote.Resource],
+    extensions: [AshRemote.DataLayer],
     notifiers: [AshRemote.MultiDatalayer.ChangeNotifier, TodoClient.RealtimeBridge]
 
   multi_data_layer do

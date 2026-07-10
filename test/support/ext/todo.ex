@@ -1,9 +1,8 @@
 defmodule AshRemote.Ext.Todo do
-  @moduledoc "Minimal resource exercising the AshRemote.Resource extension (M3)."
+  @moduledoc "Minimal resource exercising the `remote do ... end` section (M3)."
   use Ash.Resource,
     domain: AshRemote.Ext.Domain,
-    data_layer: AshRemote.DataLayer,
-    extensions: [AshRemote.Resource]
+    data_layer: AshRemote.DataLayer
 
   remote do
     source("AshRemote.Backend.Todo")

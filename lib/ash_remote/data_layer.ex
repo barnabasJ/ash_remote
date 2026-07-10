@@ -9,14 +9,25 @@ defmodule AshRemote.DataLayer do
   support is advertised.
 
   Transport/config is resolved via `remote_config/1`: for generated resources it comes
-  from the `AshRemote.Resource` extension (`remote do … end`); a hand-written
-  resource without the extension can instead supply it via application env:
+  from the `remote do … end` section this module folds in as a `Spark.Dsl.Extension`
+  (so `data_layer: AshRemote.DataLayer` alone is enough — no separate `extensions:`
+  entry needed); a hand-written resource without the section can instead supply it
+  via application env:
 
       config :ash_remote, :remote_config, %{
         MyClient.Todo => %{base_url: "...", source: "Backend.Todo", action_map: %{}}
       }
+
+  When some other module is the top-level `data_layer:` (e.g.
+  `AshMultiDatalayer.DataLayer` fronting this as one of its layers), Spark has
+  no reason to attach this section — list `AshRemote.DataLayer` under
+  `extensions:` explicitly in that case instead.
   """
   @behaviour Ash.DataLayer
+
+  use Spark.Dsl.Extension,
+    sections: [AshRemote.Resource.Section.remote()],
+    verifiers: [AshRemote.Resource.Verifiers.ValidateRemote]
 
   alias AshRemote.{Decoder, Protocol, Query, Transport}
   alias AshRemote.Encode.{Fields, Filter, Pagination, Sort}
@@ -613,9 +624,9 @@ defmodule AshRemote.DataLayer do
 
   @doc """
   Resolve the remote wire config for a resource: `%{source, base_url,
-  action_map}`. Prefers the `AshRemote.Resource` extension (generated
+  action_map}`. Prefers a declared `remote do ... end` block (generated
   resources); falls back to application env keyed by resource (for resources
-  without the extension). Public so the realtime subscriber can resolve
+  without one). Public so the realtime subscriber can resolve
   source/base_url/action_map for `realtime?` resources.
   """
   @spec remote_config(module()) :: %{

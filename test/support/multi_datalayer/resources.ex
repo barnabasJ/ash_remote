@@ -33,7 +33,7 @@ defmodule AshRemote.Test.MultiDatalayer.Resources do
     use Ash.Resource,
       domain: Domain,
       data_layer: AshMultiDatalayer.DataLayer,
-      extensions: [AshRemote.Resource],
+      extensions: [AshRemote.DataLayer],
       notifiers: [AshRemote.MultiDatalayer.ChangeNotifier]
 
     multi_data_layer do

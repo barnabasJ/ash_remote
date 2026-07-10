@@ -20,7 +20,7 @@ defmodule TodoClient.Local.Todo do
   use Ash.Resource,
     domain: TodoClient.Local,
     data_layer: AshMultiDatalayer.DataLayer,
-    extensions: [AshRemote.Resource, AshSqlite.DataLayer],
+    extensions: [AshRemote.DataLayer, AshSqlite.DataLayer],
     # Inbound realtime for a local-first resource. InboundNotifier runs FIRST — it
     # wraps the strategy-agnostic AshMultiDatalayer.Notifiers.ExternalChange
     # (which routes the replayed server change to LocalOutbox.handle_external_change

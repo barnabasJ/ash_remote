@@ -175,8 +175,8 @@ resource's orchestrator, and `LifecycleGuard` turns socket lifecycle events
 | `lib/ash_remote/protocol.ex`                            | pure request-body build / response parse                                                                  |
 | `lib/ash_remote/error.ex`                               | wire errors → `Ash.Error.*`                                                                               |
 | `lib/ash_remote/encode/`                                | `Ash.Query` → wire (fields, filter, sort, pagination)                                                     |
-| `lib/ash_remote/data_layer.ex`                          | `AshRemote.DataLayer` (implements `Ash.DataLayer`)                                                        |
-| `lib/ash_remote/resource.ex`                            | `AshRemote.Resource` extension (`remote do ... end`)                                                      |
+| `lib/ash_remote/data_layer.ex`                          | `AshRemote.DataLayer` (implements `Ash.DataLayer` and folds in the `remote do ... end` section)           |
+| `lib/ash_remote/resource/section.ex`                    | shared `remote do ... end` Spark DSL section                                                              |
 | `lib/ash_remote/manifest/`                              | manifest loader + normalized structs                                                                      |
 | `lib/ash_remote/gen/`                                   | manifest → resource source                                                                                |
 | `lib/ash_remote/server.ex`, `server/`                   | server-side RPC core + `AshRemote.Server.Router` plug (ported from ash_typescript; mount it in a backend) |

@@ -15,6 +15,6 @@ defmodule AshRemote.ResourceExtensionTest do
   end
 
   test "the validation verifier is registered on the extension" do
-    assert AshRemote.Resource.Verifiers.ValidateRemote in AshRemote.Resource.verifiers()
+    assert AshRemote.Resource.Verifiers.ValidateRemote in AshRemote.DataLayer.verifiers()
   end
 end
