@@ -506,23 +506,24 @@ defmodule AshRemote.DataLayer do
   # clause below, but a REPLICATED write can still carry a real,
   # accept-narrowed action once `put_write_action/3,4` resolves one).
   defp accepted_keys(%{context: %{private: %{ash_remote_replicated_write?: true}}} = changeset) do
-    # Neither the primary key NOR any other `writable?: false` attribute
-    # (e.g. auto-managed `inserted_at`/`updated_at` timestamps) is valid
-    # wire input — the remote correctly rejects any of them as an input
-    # attribute for its resolved action ("No such input `X` ... is
-    # currently writable?: false"). `changeset.attributes` carries every
-    # attribute the local snapshot had a value for, including these (a
-    # fresh create's lazy uuid default lands there even though the PK
-    # isn't user-writable; a hydrated snapshot's timestamps land there the
-    # same way) — so all non-writable attributes must be excluded here
-    # explicitly, not just the PK.
+    # Snapshots include non-writable fields such as server-managed timestamps;
+    # those cannot be sent as action input. A writable primary key MUST survive
+    # a replicated create, however, so offline rows keep their identity and a
+    # retry finds the same row. Updates address the row found by the upsert
+    # identity and must not replace its PK with a stale snapshot's key.
     unwritable =
       changeset.resource
       |> Ash.Resource.Info.attributes()
       |> Enum.reject(& &1.writable?)
       |> Enum.map(& &1.name)
       |> MapSet.new()
-      |> MapSet.union(MapSet.new(Ash.Resource.Info.primary_key(changeset.resource)))
+
+    unwritable =
+      if changeset.action.type == :update do
+        MapSet.union(unwritable, MapSet.new(Ash.Resource.Info.primary_key(changeset.resource)))
+      else
+        unwritable
+      end
 
     changeset.attributes |> Map.keys() |> Enum.reject(&(&1 in unwritable))
   end

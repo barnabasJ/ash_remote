@@ -57,4 +57,22 @@ defmodule AshRemote.UpsertCollisionTest do
     assert {:ok, %RaceItem{id: ^id}} = result
     assert [%RaceItem{id: ^id}] = RaceItem |> Ash.Query.filter(id == ^id) |> Ash.read!()
   end
+
+  test "action-less replication preserves a writable primary key across create and retry" do
+    id = Ash.UUID.generate()
+
+    changeset = fn title ->
+      RaceItem
+      |> Ash.Changeset.new()
+      |> Ash.Changeset.force_change_attributes(%{id: id, title: title})
+    end
+
+    assert {:ok, %RaceItem{id: ^id}} =
+             AshRemote.DataLayer.upsert(RaceItem, changeset.("offline create"), [:id])
+
+    assert {:ok, %RaceItem{id: ^id, title: "offline update"}} =
+             AshRemote.DataLayer.upsert(RaceItem, changeset.("offline update"), [:id])
+
+    assert [%RaceItem{id: ^id, title: "offline update"}] = Ash.read!(RaceItem)
+  end
 end
