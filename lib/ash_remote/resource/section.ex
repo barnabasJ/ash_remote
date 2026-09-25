@@ -44,6 +44,19 @@ defmodule AshRemote.Resource.Section do
           required: false,
           doc: "The manifest schema_version this resource was generated from."
         ],
+        server_upserts?: [
+          type: :boolean,
+          default: false,
+          doc:
+            "The remote's create action is already an idempotent upsert (e.g. " <>
+              "`upsert_fields: []` on a client-supplied identity), so `AshRemote.DataLayer.upsert/3` " <>
+              "never needs to pre-check remote existence — it dispatches straight to create, with " <>
+              "no read-then-decide and no collision-retry fallback. Set this on resources with no " <>
+              "read action capable of an arbitrary identity lookup (e.g. only a purpose-built, " <>
+              "argument-gated read like `by_session` — not a primary/unfiltered one), where the " <>
+              "default read-first strategy would otherwise crash with \"no primary action of type " <>
+              ":read\". Leave `false` for resources whose remote create can genuinely collide."
+        ],
         source_hash: [
           type: :string,
           required: false,

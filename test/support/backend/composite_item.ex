@@ -12,30 +12,30 @@ defmodule AshRemote.Backend.CompositeItem do
     data_layer: Ash.DataLayer.Ets
 
   ets do
-    private?(false)
-  end
-
-  attributes do
-    uuid_primary_key(:id, writable?: true)
-
-    attribute :tenant, :string do
-      primary_key?(true)
-      allow_nil?(false)
-      writable?(true)
-      public?(true)
-    end
-
-    attribute(:title, :string, public?: true, allow_nil?: false)
+    private? false
   end
 
   actions do
-    default_accept([:id, :tenant, :title])
-    defaults([:read, :destroy, create: :*, update: :*])
+    default_accept [:id, :tenant, :title]
+    defaults [:read, :destroy, create: :*, update: :*]
+  end
+
+  attributes do
+    uuid_primary_key :id, writable?: true
+
+    attribute :tenant, :string do
+      primary_key? true
+      allow_nil? false
+      writable? true
+      public? true
+    end
+
+    attribute :title, :string, public?: true, allow_nil?: false
   end
 
   calculations do
     calculate :shout_title, :string, expr(title) do
-      public?(true)
+      public? true
     end
   end
 end

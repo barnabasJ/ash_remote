@@ -19,8 +19,8 @@ defmodule TodoClient.Sync.OutboxEntry do
     notifiers: [TodoClient.Sync.OutboxNotifier]
 
   sqlite do
-    table("outbox_entries")
-    repo(TodoClient.Repo)
+    table "outbox_entries"
+    repo TodoClient.Repo
   end
 
   outbox_entry do

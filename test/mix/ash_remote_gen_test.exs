@@ -21,6 +21,17 @@ defmodule Mix.Tasks.AshRemote.GenTest do
     full = AshRemote.Server.manifest_json(:ash_remote)
     File.write!(full_path, full)
 
+    # Drops `field` from Todo everywhere a real removal would touch: its own
+    # `fields` entry, plus any `entrypoints` action input naming it as an
+    # argument (actions live at the manifest's top level, keyed by resource —
+    # see `AshRemote.Manifest.Loader.actions_by_resource/1` — not nested
+    # under each resource's own entry). A real "field no longer exists on the
+    # backend" manifest would never have an action input referencing it;
+    # trimming only `fields` (as this helper originally did) leaves a
+    # self-inconsistent fixture: `due_date` gone as a field but still present
+    # as a `create`/`update` argument — exactly what
+    # `AshRemote.CaptureArguments`/argument rendering was added to correctly
+    # surface, not a manifest shape any real backend produces.
     drop_todo_field = fn json, field ->
       json
       |> Jason.decode!()
@@ -31,6 +42,19 @@ defmodule Mix.Tasks.AshRemote.GenTest do
 
           res ->
             res
+        end)
+      end)
+      |> Map.update!("entrypoints", fn entrypoints ->
+        Enum.map(entrypoints, fn
+          %{"resource" => "AshRemote.Backend.Todo", "action" => action} = entrypoint ->
+            put_in(
+              entrypoint,
+              ["action", "inputs"],
+              Enum.reject(action["inputs"] || [], &(&1["name"] == field))
+            )
+
+          entrypoint ->
+            entrypoint
         end)
       end)
       |> Jason.encode!()

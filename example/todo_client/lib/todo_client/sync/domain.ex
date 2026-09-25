@@ -7,6 +7,6 @@ defmodule TodoClient.Sync do
   use Ash.Domain, validate_config_inclusion?: false
 
   resources do
-    resource(TodoClient.Sync.OutboxEntry)
+    resource TodoClient.Sync.OutboxEntry
   end
 end

@@ -39,6 +39,18 @@ defmodule AshRemote.Rpc.Info do
     end)
   end
 
+  @doc """
+  The read action `AshRemote.Server.Channel` should use to compute a
+  subscriber's per-record visibility filter for `resource`, or `nil` if the
+  domain's rpc entry doesn't override it (callers fall back to the
+  resource's primary read action).
+  """
+  def realtime_read_action(domain, resource) do
+    Enum.find_value(rpc(domain), fn entry ->
+      entry.resource == resource && entry.realtime_read_action
+    end)
+  end
+
   defp entry_publications(entry) do
     exposed = Enum.map(entry.expose, & &1.action)
     published = Enum.map(entry.publish, & &1.action)

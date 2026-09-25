@@ -87,10 +87,13 @@ Open both pages (Ada + Grace). Each client instance serves two demos:
    list. Watch the sticky cache bar: the first click on each filter is a
    miss+backfill, repeating it (or a narrower subset) is a pure hit.
 2. On Ada's page, toggle or edit a todo Grace can see. Watch Grace's page
-   refetch live — and her cache bar: exactly one new miss+backfill for the
-   filter(s) that actually matched the changed row, `invalidations` incrementing
-   by the dropped-entry count (not the full ledger), and any _other_ cached
-   filter she'd warmed stays a hit.
+   refetch live — and her cache bar: a new miss+backfill for the filter(s) the
+   changed row matched, `invalidations` incrementing by the dropped-entry
+   count (not the full ledger). The drop is deliberately conservative — an
+   inbound change carries no trustworthy local before-image, so every warmed
+   filter on a non-key field of that resource is dropped too; only a point
+   lookup on a *different* row's id is guaranteed to stay a hit (see
+   DECISIONS.md, 2026-09-25).
 3. Edit a **private** todo of Ada's that Grace can't see — the server's
    per-record channel authorization means Grace's page (and cache) don't change.
 4. Kill `todo_server` briefly, make a change on Ada's side, then reconnect. The

@@ -6,72 +6,105 @@ defmodule AshRemote.Backend.Todo do
     notifiers: [AshRemote.Server.Notifier]
 
   ets do
-    private?(false)
+    private? false
   end
 
-  attributes do
-    uuid_primary_key(:id)
+  actions do
+    default_accept [
+      :title,
+      :completed,
+      :status,
+      :priority_score,
+      :due_date,
+      :user_id,
+      :parent_id
+    ]
 
-    attribute(:title, :string, public?: true, allow_nil?: false)
-    attribute(:completed, :boolean, public?: true, default: false, allow_nil?: false)
-    attribute(:status, AshRemote.Backend.Todo.Status, public?: true, default: :pending)
-    attribute(:priority_score, AshRemote.Backend.PriorityScore, public?: true)
-    attribute(:due_date, :date, public?: true)
+    read :read do
+      primary? true
 
-    # Private — retained regression for #1's private-attribute half (fixed in
-    # an earlier run): must never be selectable/serializable by name.
-    attribute(:internal_notes, :string, public?: false)
-  end
-
-  relationships do
-    belongs_to :user, AshRemote.Backend.User do
-      public?(true)
-      attribute_writable?(true)
+      pagination offset?: true,
+                 keyset?: true,
+                 countable: true,
+                 default_limit: 20,
+                 required?: false
     end
 
-    has_many(:comments, AshRemote.Backend.Comment, public?: true)
-
-    # Self-referential, with a FK that name-based inference can't guess —
-    # exercises the manifest's source/destination attribute round-trip.
-    belongs_to :parent, AshRemote.Backend.Todo do
-      public?(true)
-      attribute_writable?(true)
+    read :get_by_id do
+      get_by :id
     end
 
-    has_many :subtasks, AshRemote.Backend.Todo do
-      public?(true)
-      destination_attribute(:parent_id)
-    end
-  end
-
-  aggregates do
-    count :comment_count, :comments do
-      public?(true)
-    end
-
-    # M7: a decimal-typed aggregate target.
-    avg :avg_comment_rating, :comments, :rating do
-      public?(true)
+    # A non-primary read taking a real argument (not an attribute of the
+    # same name) — the shape that caught two client-side bugs generating
+    # from a real backend (arcc-center): the generator rendered zero
+    # arguments for read actions at all, and even once rendered, the data
+    # layer never resolved anything but the resource's *primary* read action
+    # nor threaded a query's argument values into the request.
+    read :by_status do
+      argument :status, :atom, allow_nil?: false
+      filter expr(status == ^arg(:status))
     end
 
-    # Private — exercises the RPC field-policy boundary (B1): must never be
-    # selectable/serializable by name over the wire.
-    count :internal_comment_count, :comments do
-      public?(false)
+    create :create do
+      primary? true
+    end
+
+    update :update do
+      primary? true
+      require_atomic? false
+    end
+
+    destroy :destroy do
+      primary? true
     end
   end
 
   validations do
     # Mirrorable: builtin modules, literal opts — published in the manifest.
-    validate(string_length(:title, min: 3))
-    validate(match(:title, ~r/^[^!]/))
+    validate string_length(:title, min: 3)
+    validate match(:title, ~r/^[^!]/)
 
     # Mirrorable including its `where`: conditions are the same {module, opts}
     # shape as validations and round-trip when they pass the same test.
-    validate(present(:title), where: [changing(:title)])
+    validate present(:title), where: [changing(:title)]
 
     # Not mirrorable (function validation): must be skipped by publishing.
-    validate(fn changeset, _context -> :ok end)
+    validate fn changeset, _context -> :ok end
+  end
+
+  attributes do
+    uuid_primary_key :id
+
+    attribute :title, :string, public?: true, allow_nil?: false
+    attribute :completed, :boolean, public?: true, default: false, allow_nil?: false
+    attribute :status, AshRemote.Backend.Todo.Status, public?: true, default: :pending
+    attribute :priority_score, AshRemote.Backend.PriorityScore, public?: true
+    attribute :due_date, :date, public?: true
+
+    # Private — retained regression for #1's private-attribute half (fixed in
+    # an earlier run): must never be selectable/serializable by name.
+    attribute :internal_notes, :string, public?: false
+  end
+
+  relationships do
+    belongs_to :user, AshRemote.Backend.User do
+      public? true
+      attribute_writable? true
+    end
+
+    has_many :comments, AshRemote.Backend.Comment, public?: true
+
+    # Self-referential, with a FK that name-based inference can't guess —
+    # exercises the manifest's source/destination attribute round-trip.
+    belongs_to :parent, AshRemote.Backend.Todo do
+      public? true
+      attribute_writable? true
+    end
+
+    has_many :subtasks, AshRemote.Backend.Todo do
+      public? true
+      destination_attribute :parent_id
+    end
   end
 
   calculations do
@@ -79,28 +112,28 @@ defmodule AshRemote.Backend.Todo do
     calculate :is_overdue,
               :boolean,
               expr(not is_nil(due_date) and due_date < today() and not completed) do
-      public?(true)
+      public? true
     end
 
     # Calculation WITH an argument.
     calculate :title_with_prefix, :string, AshRemote.Backend.Todo.TitleWithPrefix do
-      public?(true)
+      public? true
 
       argument :prefix, :string do
-        allow_nil?(false)
-        default("")
+        allow_nil? false
+        default ""
       end
     end
 
     # Private — exercises the RPC field-policy boundary (B1): must never be
     # selectable/serializable by name over the wire.
     calculate :internal_risk_score, :integer, expr(1) do
-      public?(false)
+      public? false
     end
 
     # M7: a date-typed calculation target.
     calculate :deadline_echo, :date, expr(due_date) do
-      public?(true)
+      public? true
     end
 
     # L7-5: an EXPRESSION-based calc WITH an argument — unlike
@@ -112,49 +145,34 @@ defmodule AshRemote.Backend.Todo do
     # — exercising the exact expr(remote(name, %{args}, pk)) client shape a
     # parameterized sort needs to preserve args through.
     calculate :title_matches_target, :boolean, expr(title == ^arg(:target)) do
-      public?(true)
-      argument(:target, :string, allow_nil?: false, default: "")
+      public? true
+      argument :target, :string, allow_nil?: false, default: ""
+    end
+
+    # H-utc-precision: a `:utc_datetime`-typed calc target for
+    # `Server.FieldsTest`'s microsecond-precision dump regression — the calc's
+    # expr never actually runs in that test (`Fields.serialize/3` is
+    # exercised directly against a hand-built record); it only needs to exist
+    # so `field_type/2` resolves a real `{:utc_datetime, constraints}` pair.
+    calculate :fixed_point_in_time, :utc_datetime, expr(now()) do
+      public? true
     end
   end
 
-  actions do
-    default_accept([
-      :title,
-      :completed,
-      :status,
-      :priority_score,
-      :due_date,
-      :user_id,
-      :parent_id
-    ])
-
-    read :read do
-      primary?(true)
-
-      pagination(
-        offset?: true,
-        keyset?: true,
-        countable: true,
-        default_limit: 20,
-        required?: false
-      )
+  aggregates do
+    count :comment_count, :comments do
+      public? true
     end
 
-    read :get_by_id do
-      get_by(:id)
+    # M7: a decimal-typed aggregate target.
+    avg :avg_comment_rating, :comments, :rating do
+      public? true
     end
 
-    create :create do
-      primary?(true)
-    end
-
-    update :update do
-      primary?(true)
-      require_atomic?(false)
-    end
-
-    destroy :destroy do
-      primary?(true)
+    # Private — exercises the RPC field-policy boundary (B1): must never be
+    # selectable/serializable by name over the wire.
+    count :internal_comment_count, :comments do
+      public? false
     end
   end
 end

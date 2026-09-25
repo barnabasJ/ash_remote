@@ -127,6 +127,20 @@ defmodule AshRemote.E2ETest do
     assert Ash.get!(mod(:Todo), todo.id).id == todo.id
   end
 
+  test "a non-primary read action's argument round-trips (by_status)" do
+    %{todo: doing} = seed()
+    pending = Ash.create!(mod(:Todo), %{title: "Later", status: :pending})
+
+    results =
+      mod(:Todo)
+      |> Ash.Query.for_read(:by_status, %{status: :pending})
+      |> Ash.read!()
+
+    ids = Enum.map(results, & &1.id)
+    assert pending.id in ids
+    refute doing.id in ids
+  end
+
   test "mirrored validations run client-side, without a round trip" do
     # Unreachable backend: if the error is a validation error (not a transport
     # error), it was produced client-side before any HTTP request.

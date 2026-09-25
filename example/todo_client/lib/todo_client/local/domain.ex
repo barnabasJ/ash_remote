@@ -8,6 +8,6 @@ defmodule TodoClient.Local do
   use Ash.Domain, validate_config_inclusion?: false
 
   resources do
-    resource(TodoClient.Local.Todo)
+    resource TodoClient.Local.Todo
   end
 end

@@ -98,7 +98,11 @@ end
 defmodule AshRemote.Manifest.Type do
   @moduledoc false
   @type t :: %__MODULE__{}
-  defstruct [:kind, :name, :module, :values, :constraints, :item_type, :instance_of]
+  # `resource` is set only for `kind: :embedded_resource` (and top-level
+  # `kind: :resource` type entries) — the full %Resource{} definition,
+  # mirroring how Ash.Info.Manifest.Type carries `resource_module`/inline
+  # fields for the same two kinds.
+  defstruct [:kind, :name, :module, :values, :constraints, :item_type, :instance_of, :resource]
 end
 
 defmodule AshRemote.Manifest.Relationship do

@@ -8,8 +8,21 @@ defmodule AshRemote.MixProject do
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
+      aliases: aliases(),
       deps: deps()
     ]
+  end
+
+  defp aliases do
+    [
+      # `mix test` only runs this project's suite; the in-repo package under
+      # packages/ash_cloner has its own. This runs both.
+      "test.all": ["cmd --cd packages/ash_cloner mix test", "test"]
+    ]
+  end
+
+  def cli do
+    [preferred_envs: ["test.all": :test]]
   end
 
   def application do
@@ -25,6 +38,10 @@ defmodule AshRemote.MixProject do
     [
       # Ash.Info.Manifest ships in ash core (>= 3.29).
       {:ash, "~> 3.29"},
+      # The generic resource-cloning engine `mix ash_remote.gen` is built on
+      # (definition contract + Igniter create/ensure/drift apply engine).
+      # Developed in-repo; extracted so any package can ship cloneable resources.
+      {:ash_cloner, path: "packages/ash_cloner"},
       {:igniter, "~> 0.6"},
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},
@@ -47,7 +64,11 @@ defmodule AshRemote.MixProject do
       # dep pulls `plug` in all envs and an `:only` restriction diverges.
       {:plug, "~> 1.16", optional: true},
       # Reference-backend HTTP server (test/dev only).
-      {:bandit, "~> 1.5", only: [:dev, :test]}
+      {:bandit, "~> 1.5", only: [:dev, :test]},
+      # Spark.Formatter (mix format plugin, below) needs it to parse/patch source.
+      # No `only:` restriction: ash_multi_datalayer already depends on it
+      # unrestricted, and mix rejects divergent `only:` values for the same dep.
+      {:sourceror, "~> 1.8"}
     ]
   end
 end

@@ -21,9 +21,9 @@ defmodule AshRemote.Test.MultiDatalayer.Resources do
     use Ash.Domain, validate_config_inclusion?: false
 
     resources do
-      resource(AshRemote.Test.MultiDatalayer.Resources.CachedThing)
-      resource(AshRemote.Test.MultiDatalayer.Resources.PlainEtsThing)
-      resource(AshRemote.Test.MultiDatalayer.Resources.SpyThing)
+      resource AshRemote.Test.MultiDatalayer.Resources.CachedThing
+      resource AshRemote.Test.MultiDatalayer.Resources.PlainEtsThing
+      resource AshRemote.Test.MultiDatalayer.Resources.SpyThing
     end
   end
 
@@ -37,30 +37,30 @@ defmodule AshRemote.Test.MultiDatalayer.Resources do
       notifiers: [AshRemote.MultiDatalayer.ChangeNotifier]
 
     multi_data_layer do
-      layer(:cache, Ash.DataLayer.Ets)
-      layer(:remote, Ash.DataLayer.Ets)
+      layer :cache, Ash.DataLayer.Ets
+      layer :remote, Ash.DataLayer.Ets
 
-      read_order([:cache, :remote])
-      write_order([:remote, :cache])
+      read_order [:cache, :remote]
+      write_order [:remote, :cache]
     end
 
     remote do
-      source("Test.CachedThing")
+      source "Test.CachedThing"
     end
 
     attributes do
-      uuid_primary_key(:id)
-      attribute(:name, :string, public?: true)
+      uuid_primary_key :id
+      attribute :name, :string, public?: true
 
       attribute :status, :atom do
-        public?(true)
-        constraints(one_of: [:open, :done])
-        default(:open)
+        public? true
+        constraints one_of: [:open, :done]
+        default :open
       end
     end
 
     actions do
-      defaults([:read, :destroy, create: :*, update: :*])
+      defaults [:read, :destroy, create: :*, update: :*]
     end
   end
 
@@ -73,22 +73,22 @@ defmodule AshRemote.Test.MultiDatalayer.Resources do
       notifiers: [AshRemote.MultiDatalayer.ChangeNotifier]
 
     multi_data_layer do
-      orchestrator(AshRemote.Test.MultiDatalayer.SpyOrchestrator)
+      orchestrator AshRemote.Test.MultiDatalayer.SpyOrchestrator
 
-      layer(:cache, Ash.DataLayer.Ets)
-      layer(:remote, Ash.DataLayer.Ets)
+      layer :cache, Ash.DataLayer.Ets
+      layer :remote, Ash.DataLayer.Ets
 
-      read_order([:cache, :remote])
-      write_order([:remote, :cache])
+      read_order [:cache, :remote]
+      write_order [:remote, :cache]
     end
 
     attributes do
-      uuid_primary_key(:id)
-      attribute(:name, :string, public?: true)
+      uuid_primary_key :id
+      attribute :name, :string, public?: true
     end
 
     actions do
-      defaults([:read, :destroy, create: :*, update: :*])
+      defaults [:read, :destroy, create: :*, update: :*]
     end
   end
 
@@ -100,12 +100,12 @@ defmodule AshRemote.Test.MultiDatalayer.Resources do
       data_layer: Ash.DataLayer.Ets
 
     attributes do
-      uuid_primary_key(:id)
-      attribute(:name, :string, public?: true)
+      uuid_primary_key :id
+      attribute :name, :string, public?: true
     end
 
     actions do
-      defaults([:read, :destroy, create: :*, update: :*])
+      defaults [:read, :destroy, create: :*, update: :*]
     end
   end
 end

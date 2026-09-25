@@ -61,7 +61,11 @@ defmodule TodoClient.MixProject do
 
       # The backend, only for the in-BEAM end-to-end test (starts its RPC router
       # via Bandit on localhost). Not needed to build or ship the client.
-      {:todo_server, path: "../todo_server", only: :test, runtime: false}
+      {:todo_server, path: "../todo_server", only: :test, runtime: false},
+      # Spark.Formatter (mix format plugin, below) needs it to parse/patch source.
+      # No `only:` restriction: ash_multi_datalayer already depends on it
+      # unrestricted, and mix rejects divergent `only:` values for the same dep.
+      {:sourceror, "~> 1.8"}
     ]
   end
 end

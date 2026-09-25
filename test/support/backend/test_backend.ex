@@ -24,7 +24,12 @@ defmodule AshRemote.Backend.TestBackend do
 
   @doc "Delete all ETS-backed rows for the reference backend resources."
   def reset! do
-    for resource <- Ash.Domain.Info.resources(AshRemote.Backend.Domain) do
+    for resource <- Ash.Domain.Info.resources(AshRemote.Backend.Domain),
+        # `UpsertOnly` (the `server_upserts?` fixture) deliberately has no
+        # primary read — mirroring a real worker-scoped resource whose only
+        # read is non-primary/argument-gated. Its tests use fresh
+        # per-test identities, so skipping the reset here is safe.
+        Ash.Resource.Info.primary_action(resource, :read) do
       resource
       |> Ash.read!()
       |> Enum.each(&Ash.destroy!/1)

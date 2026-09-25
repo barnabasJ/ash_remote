@@ -75,8 +75,12 @@ defmodule AshRemote.Server.Fields do
       case field do
         name when is_binary(name) ->
           case public_name(resource, name) do
-            {:ok, atom} -> Map.put(acc, name, value(field_value(record, resource, atom)))
-            :error -> acc
+            {:ok, atom} ->
+              val = value(field_value(record, resource, atom), field_type(resource, atom))
+              Map.put(acc, name, val)
+
+            :error ->
+              acc
           end
 
         %{} = map ->
@@ -88,7 +92,7 @@ defmodule AshRemote.Server.Fields do
             dest = related(resource, atom)
             Map.put(acc, key, serialize(loaded(val), dest, subfields(spec)))
           else
-            Map.put(acc, key, value(val))
+            Map.put(acc, key, value(val, field_type(resource, atom)))
           end
       end
     end)
@@ -97,9 +101,72 @@ defmodule AshRemote.Server.Fields do
   defp loaded(%Ash.NotLoaded{}), do: nil
   defp loaded(%Ash.ForbiddenField{}), do: nil
   defp loaded(other), do: other
-  defp value(%Ash.NotLoaded{}), do: nil
-  defp value(%Ash.ForbiddenField{}), do: nil
-  defp value(other), do: other
+  defp value(%Ash.NotLoaded{}, _type), do: nil
+  defp value(%Ash.ForbiddenField{}, _type), do: nil
+  defp value(nil, _type), do: nil
+  # Attributes/calculations carry a real Ash type — a value the caller's
+  # native representation isn't Jason-encodable by luck (a `Decimal`, a
+  # `DateTime`) has to be dumped through it before the router's `Jason.encode!`
+  # ever sees it, or a custom-typed field (an `Ash.Type.NewType` struct with no
+  # `Jason.Encoder` of its own — arcc-center's `AshScheduling.TimeRange` on
+  # `Session.range`, e.g.) crashes the whole response. Aggregates have no
+  # single fixed type in the DSL entity (it depends on `kind`/`field` at read
+  # time) — left as a raw passthrough, same as before this fix; the common
+  # aggregate kinds (count, sum, exists, ...) are already JSON-safe primitives.
+  #
+  # A calculation's raw value is NOT guaranteed to already be a canonical
+  # instance of its declared type/constraints, unlike an attribute (which
+  # went through `cast_stored/3` on the way out of the data layer) — an
+  # expression-based calc backed by a raw DB fragment hands back whatever the
+  # driver decoded verbatim. A `:utc_datetime`-declared calc backed by a
+  # Postgres `timestamptz`, e.g., always carries Ecto's internal `{0, 6}`
+  # microsecond precision even when every digit is zero; `Ecto.Type.dump/2`
+  # for `:utc_datetime` requires literal `{0, 0}` and raises otherwise (a real
+  # crash this caused end to end: arcc-center's `Session.start_datetime`/
+  # `end_datetime`). `cast_input/3` is the sanctioned Ash normalization step
+  # for exactly this — it truncates a `:utc_datetime`'s precision the same
+  # way action input casting always has — so run it before dumping. Falls
+  # back to the raw value on a normalization miss (an already-canonical value
+  # that doesn't strictly validate as fresh "input", e.g.) rather than
+  # failing the whole field.
+  defp value(other, {type, constraints}) do
+    constraints = constraints || []
+
+    other
+    |> normalize(type, constraints)
+    |> dump(type, constraints)
+  end
+
+  defp value(other, nil), do: other
+
+  defp normalize(value, type, constraints) do
+    case Ash.Type.cast_input(type, value, constraints) do
+      {:ok, normalized} -> normalized
+      _ -> value
+    end
+  end
+
+  defp dump(value, type, constraints) do
+    case Ash.Type.dump_to_embedded(type, value, constraints) do
+      {:ok, dumped} -> dumped
+      :error -> value
+    end
+  end
+
+  defp field_type(resource, atom) do
+    cond do
+      attribute?(resource, atom) ->
+        attr = Info.public_attribute(resource, atom)
+        {attr.type, attr.constraints}
+
+      calculation?(resource, atom) ->
+        calc = Info.public_calculation(resource, atom)
+        {calc.type, calc.constraints}
+
+      true ->
+        nil
+    end
+  end
 
   defp field_value(record, resource, atom) do
     cond do

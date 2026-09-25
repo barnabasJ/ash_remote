@@ -163,6 +163,56 @@ defmodule AshRemote.GenTest do
     end
   end
 
+  describe "mirrored calculation reproducibility re-check" do
+    # `is_overdue`'s own real expression only references plain attributes
+    # (`due_date`, `completed`), which were always locally available — these
+    # tests repurpose its slot with a synthetic `expression` string to cover
+    # the *aggregate*-reference case `AshRemote.Expression.encode/2`'s
+    # widened `public_field?/2` now allows through at publish time, and that
+    # `calculation_block/4`'s own re-check must still gate correctly.
+    test "an expression referencing a native aggregate mirrors as a real local calc", %{
+      manifest: manifest
+    } do
+      manifest =
+        update_todo_field(manifest, "is_overdue", &%{&1 | expression: "(comment_count > 0)"})
+
+      source = todo_source(manifest)
+
+      assert source =~ "expr((comment_count > 0))"
+      refute source =~ ~s|remote("is_overdue"|
+    end
+
+    test "falls back to remote() when the referenced aggregate isn't reproducible here", %{
+      manifest: manifest
+    } do
+      # Same synthetic expression as above, but `comment_count`'s own
+      # relationship no longer mirrors (the exact scenario the "aggregates"
+      # describe block covers on its own) — the calc must not trust a name
+      # that its own generation run isn't actually emitting locally.
+      manifest =
+        manifest
+        |> update_todo_field("is_overdue", &%{&1 | expression: "(comment_count > 0)"})
+        |> update_todo_field("comment_count", &%{&1 | relationship: nil})
+
+      source = todo_source(manifest)
+
+      assert source =~ ~s|remote("is_overdue"|
+      refute source =~ "expr((comment_count > 0))"
+    end
+
+    test "falls back to remote() when the referenced name is simply unknown here", %{
+      manifest: manifest
+    } do
+      manifest =
+        update_todo_field(manifest, "is_overdue", &%{&1 | expression: "(not_a_real_field > 0)"})
+
+      source = todo_source(manifest)
+
+      assert source =~ ~s|remote("is_overdue"|
+      refute source =~ "expr((not_a_real_field > 0))"
+    end
+  end
+
   describe "validations" do
     test "the generated resource contains the mirrored validations, in sugar form", %{
       manifest: manifest
@@ -453,5 +503,88 @@ defmodule AshRemote.GenTest do
       source = todo_source(manifest)
       assert {:ok, _ast} = Code.string_to_quoted(source)
     end
+  end
+
+  # Found generating client resources from a real arcc-center manifest: a
+  # backend field typed as an embedded resource (e.g. an `:address` struct
+  # attribute) has `type.kind == :embedded_resource`, which fell through
+  # `gen_type/2`'s catch-all `subtype -> "use Ash.Type.NewType, subtype_of:
+  # ..."` branch — emitting `subtype_of: :embedded_resource`, not a valid
+  # NewType subtype, which fails to compile.
+  describe "embedded resource named types" do
+    defp inject_embedded_type(manifest, module) do
+      resource = %AshRemote.Manifest.Resource{
+        module: module,
+        embedded?: true,
+        primary_key: [],
+        fields: %{
+          "line1" => %AshRemote.Manifest.Field{
+            name: "line1",
+            kind: :attribute,
+            type: %AshRemote.Manifest.Type{kind: :string},
+            allow_nil?: false,
+            writable?: true
+          }
+        }
+      }
+
+      type = %AshRemote.Manifest.Type{
+        kind: :embedded_resource,
+        name: "Address",
+        module: module,
+        resource: resource
+      }
+
+      %{manifest | types: Map.put(manifest.types, module, type)}
+    end
+
+    test "generates a real embedded Ash.Resource, not a broken NewType", %{manifest: manifest} do
+      manifest = inject_embedded_type(manifest, "AshRemote.Backend.Address")
+
+      source =
+        manifest
+        |> AshRemote.Gen.generate(namespace: "GenVal")
+        |> Enum.find(&String.ends_with?(&1.module, ".Address"))
+        |> Map.fetch!(:source)
+
+      assert source =~ "use Ash.Resource, data_layer: :embedded"
+      assert source =~ "attribute :line1, :string"
+      refute source =~ "NewType"
+      assert {:ok, _ast} = Code.string_to_quoted(source)
+    end
+  end
+
+  # Found generating client resources from a real arcc-center manifest: a
+  # `has_one`/`has_many`'s `destination_attribute` is not guaranteed present
+  # on the destination resource's own manifest entry — an inverse
+  # relationship can be public while the owning `belongs_to`'s raw FK isn't.
+  # Rendering it anyway produces a `has_one`/`has_many` Ash's
+  # `ValidateRelationshipAttributes` verifier rejects at compile time.
+  describe "relationships with an unresolvable destination_attribute" do
+    test "renders a skip comment instead of a broken has_many", %{manifest: manifest} do
+      manifest =
+        update_todo_relationship(manifest, "comments", fn rel ->
+          %{rel | destination_attribute: "not_a_real_attribute"}
+        end)
+
+      source = todo_source(manifest)
+
+      assert source =~ "# Skipped :comments"
+      refute source =~ "has_many :comments"
+      assert {:ok, _ast} = Code.string_to_quoted(source)
+    end
+
+    test "still renders normally when the destination_attribute is resolvable", %{
+      manifest: manifest
+    } do
+      source = todo_source(manifest)
+      assert source =~ "has_many :comments"
+    end
+  end
+
+  test "every generated resource sets primary_read_warning?: false (generated actions are manifest-mirrored stubs, not hand-authored primary reads)",
+       %{manifest: manifest} do
+    source = todo_source(manifest)
+    assert source =~ "primary_read_warning?: false"
   end
 end

@@ -59,17 +59,22 @@ defmodule TodoClient.InvalidationWiringTest do
     {entry_id, result}
   end
 
-  test "a fabricated remote update notification drops only the matching coverage", %{
+  # ProvenCoverage's inbound reaction is deliberately conservative (see
+  # `AshRemote.MultiDatalayer.ChangeNotifierTest` and MDL's own
+  # `ProvenCoverage.handle_external_change/2` comment): with no local
+  # before-image, every entry predicated on a non-PK field is dropped, and only
+  # a point query on a *different* PK is guaranteed to survive.
+  test "a fabricated remote update notification drops the coverage the changed row matches", %{
     list: list,
     other_list: other_list
   } do
     server_create_todo!(%{title: "Here", list_id: list.id})
-    server_create_todo!(%{title: "There", list_id: other_list.id})
+    there = server_create_todo!(%{title: "There", list_id: other_list.id})
 
     # Warm coverage through the real client resource — this also backfills
     # the row into the cache layer as a genuine %TodoClient.Remote.Todo{}.
     {list_entry_id, [here]} = warm(Ash.Query.filter(Todo, list_id == ^list.id))
-    {other_entry_id, _} = warm(Ash.Query.filter(Todo, list_id == ^other_list.id))
+    {there_pk_entry_id, [_there]} = warm(Ash.Query.filter(Todo, id == ^there.id))
 
     # This client never wrote `here` locally — it's cached purely from the
     # read above. The change notifier routes the notification through the
@@ -82,7 +87,7 @@ defmodule TodoClient.InvalidationWiringTest do
 
     remaining = Coverage.entries(Todo, nil) |> MapSet.new(& &1.id)
     refute list_entry_id in remaining
-    assert other_entry_id in remaining
+    assert there_pk_entry_id in remaining
   end
 
   test "LifecycleGuard drops the full ledger on a fabricated :resubscribed event",

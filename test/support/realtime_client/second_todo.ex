@@ -13,21 +13,21 @@ defmodule AshRemote.RealtimeClient.SecondTodo do
     notifiers: [AshRemote.RealtimeClient.CaptureNotifier]
 
   remote do
-    source("AshRemote.Backend.Todo")
-    realtime?(true)
-  end
-
-  attributes do
-    uuid_primary_key(:id)
-    attribute(:title, :string, public?: true, allow_nil?: false)
-    attribute(:completed, :boolean, public?: true, default: false, allow_nil?: false)
-    attribute(:status, AshRemote.Backend.Todo.Status, public?: true)
-    attribute(:priority_score, AshRemote.Backend.PriorityScore, public?: true)
-    attribute(:due_date, :date, public?: true)
+    source "AshRemote.Backend.Todo"
+    realtime? true
   end
 
   actions do
-    default_accept([:title, :completed, :status, :priority_score, :due_date])
-    defaults([:read, :create, :update, :destroy])
+    default_accept [:title, :completed, :status, :priority_score, :due_date]
+    defaults [:read, :create, :update, :destroy]
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :title, :string, public?: true, allow_nil?: false
+    attribute :completed, :boolean, public?: true, default: false, allow_nil?: false
+    attribute :status, AshRemote.Backend.Todo.Status, public?: true
+    attribute :priority_score, AshRemote.Backend.PriorityScore, public?: true
+    attribute :due_date, :date, public?: true
   end
 end

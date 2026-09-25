@@ -10,14 +10,19 @@ defmodule AshRemote.RealtimeClient.Document do
     notifiers: [AshRemote.RealtimeClient.CaptureNotifier]
 
   remote do
-    source("AshRemote.Backend.Document")
-    realtime?(true)
+    source "AshRemote.Backend.Document"
+    realtime? true
+  end
+
+  actions do
+    default_accept [:title, :owner_id]
+    defaults [:read, :create, :update, :destroy]
   end
 
   attributes do
-    uuid_primary_key(:id)
-    attribute(:title, :string, public?: true, allow_nil?: false)
-    attribute(:owner_id, :uuid, public?: true)
+    uuid_primary_key :id
+    attribute :title, :string, public?: true, allow_nil?: false
+    attribute :owner_id, :uuid, public?: true
   end
 
   calculations do
@@ -25,11 +30,6 @@ defmodule AshRemote.RealtimeClient.Document do
     # not the generator's `remote(...)` expression form) — not selected by
     # default, so a plain read never prefetches it; `Ash.load!/3` on
     # already-fetched records is the "bundled fetch" path under test.
-    calculate(:is_owner, :boolean, {AshRemote.RemoteCalculation, calc: :is_owner})
-  end
-
-  actions do
-    default_accept([:title, :owner_id])
-    defaults([:read, :create, :update, :destroy])
+    calculate :is_owner, :boolean, {AshRemote.RemoteCalculation, calc: :is_owner}
   end
 end

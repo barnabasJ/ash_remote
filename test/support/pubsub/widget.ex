@@ -9,23 +9,23 @@ defmodule AshRemote.PubSubFixture.Widget do
     data_layer: Ash.DataLayer.Ets
 
   ets do
-    private?(false)
-  end
-
-  attributes do
-    uuid_primary_key(:id)
-    attribute(:name, :string, public?: true)
+    private? false
   end
 
   actions do
-    defaults([:read, :create, :update, :destroy])
+    defaults [:read, :create, :update, :destroy]
 
     update :internal_touch do
-      accept([])
+      accept []
     end
 
     update :bar_touch do
-      accept([])
+      accept []
     end
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true
   end
 end

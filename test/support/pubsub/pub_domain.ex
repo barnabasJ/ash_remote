@@ -2,12 +2,6 @@ defmodule AshRemote.PubSubFixture.PubDomain do
   @moduledoc false
   use Ash.Domain, extensions: [AshRemote.Rpc], validate_config_inclusion?: false
 
-  resources do
-    resource(AshRemote.PubSubFixture.Post)
-    resource(AshRemote.PubSubFixture.AttrTenantThing)
-    resource(AshRemote.PubSubFixture.CtxTenantThing)
-  end
-
   rpc do
     pub_sub(AshRemote.PubSubFixture.TestPubSub)
 
@@ -28,5 +22,11 @@ defmodule AshRemote.PubSubFixture.PubDomain do
       expose(:create)
       expose(:update)
     end
+  end
+
+  resources do
+    resource AshRemote.PubSubFixture.Post
+    resource AshRemote.PubSubFixture.AttrTenantThing
+    resource AshRemote.PubSubFixture.CtxTenantThing
   end
 end

@@ -36,12 +36,103 @@ defmodule AshRemote.ExpressionTest do
             "author.name == \"x\"",
             "System.cmd(\"rm\", [\"-rf\"])",
             "apply(File, :rm!, [\"x\"])",
-            "if true, do: 1",
             "%{a: today}",
             "due_date < today(1)"
           ] do
         refute Expression.safe?(code), "expected unsafe: #{code}"
       end
+    end
+
+    test "accepts if/else — the shape cond do...end desugars to" do
+      for code <- [
+            "if(due_date < today(), do: :overdue, else: :ok)",
+            "if(is_nil(due_date), do: :ok, else: if((due_date < today()), do: :overdue, else: :ok))"
+          ] do
+        assert Expression.safe?(code), "expected safe: #{code}"
+      end
+    end
+
+    test "rejects unsafe content hidden inside an if branch" do
+      for code <- [
+            "if(true, do: File.rm!(\"/etc/passwd\"), else: :ok)",
+            "if(author.name == \"x\", do: :ok, else: :ok)",
+            "if(true, do: :ok, else: fragment(\"1=1\"))"
+          ] do
+        refute Expression.safe?(code), "expected unsafe: #{code}"
+      end
+    end
+  end
+
+  describe "encode/2 with if/cond" do
+    alias Ash.Query.{Call, Ref}
+
+    defp ref(attribute), do: %Ref{attribute: attribute, relationship_path: []}
+
+    test "encodes a cond-desugared if with a missing :else as nil" do
+      # `if due_date < today(), do: :overdue` with no else branch — Ash's own
+      # `Ash.Query.Function.If.new/2` defaults a missing `:else` key to `nil`,
+      # so the encoder must treat "key absent" the same as "key present with
+      # value nil" rather than rejecting it.
+      ast = %Call{
+        name: :if,
+        relationship_path: [],
+        args: [
+          %Call{
+            name: :<,
+            relationship_path: [],
+            args: [ref(:due_date), %Call{name: :today, relationship_path: [], args: []}]
+          },
+          [do: :overdue]
+        ]
+      }
+
+      assert {:ok, code} = Expression.encode(ast, AshRemote.Backend.Todo)
+      assert code =~ "do: :overdue"
+      assert code =~ "else: nil"
+      assert Expression.safe?(code)
+    end
+
+    test "encodes nested if calls (a multi-branch cond) recursively" do
+      ast = %Call{
+        name: :if,
+        relationship_path: [],
+        args: [
+          %Call{name: :is_nil, relationship_path: [], args: [ref(:due_date)]},
+          [
+            do: :no_due_date,
+            else: %Call{
+              name: :if,
+              relationship_path: [],
+              args: [
+                %Call{
+                  name: :<,
+                  relationship_path: [],
+                  args: [ref(:due_date), %Call{name: :today, relationship_path: [], args: []}]
+                },
+                [do: :overdue, else: :ok]
+              ]
+            }
+          ]
+        ]
+      }
+
+      assert {:ok, code} = Expression.encode(ast, AshRemote.Backend.Todo)
+      assert code =~ "is_nil(due_date)"
+      assert code =~ "do: :no_due_date"
+      assert code =~ "due_date < today()"
+      assert Expression.safe?(code)
+    end
+
+    test "still refuses to encode a Postgres-only function like lower/1 on a range" do
+      # `lower/1`/`upper/1` on a range compile to a raw Postgres SQL function
+      # with no defined meaning on another data layer — mirroring them by
+      # name would silently collide with SQLite's own string-casing
+      # `lower`/`upper` builtins and return wrong values instead of failing
+      # loudly, so they must stay unrecognized (falling back to `remote(...)`
+      # in the generator), unlike `if`, which has a real `evaluate/1`.
+      ast = %Call{name: :lower, relationship_path: [], args: [ref(:due_date)]}
+
+      assert Expression.encode(ast, AshRemote.Backend.Todo) == :error
     end
   end
 

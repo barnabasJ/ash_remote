@@ -32,9 +32,25 @@ defmodule AshRemote.Manifest.Loader do
                  :attribute,
                  :aggregate,
                  :calculation,
-                 # AshRemote.Manifest.Type.kind (structural, non-primitive)
+                 # AshRemote.Manifest.Type.kind (structural, non-primitive) —
+                 # the full kind() vocabulary in Ash.Info.Manifest.Type minus
+                 # what Ash.Type.short_names/0 already covers below. `:resource`
+                 # and `:embedded_resource` are the ones that actually bit: a
+                 # manifest field typed as an embedded resource (e.g. an
+                 # `:address` struct attribute) crashed `load/2` with "not a
+                 # known Ash vocabulary atom" the first time this loader ran in
+                 # a fresh VM that hadn't incidentally loaded
+                 # `Ash.Info.Manifest.Type` (whose own source is the only other
+                 # place these literals appear) — exactly the R-8 boot-order
+                 # hazard this list exists to close, just previously
+                 # incomplete for this kind.
                  :type_ref,
                  :enum,
+                 :resource,
+                 :embedded_resource,
+                 :array,
+                 :any,
+                 :unknown,
                  # AshRemote.Manifest.Relationship.type / .cardinality
                  :belongs_to,
                  :has_one,
@@ -270,7 +286,12 @@ defmodule AshRemote.Manifest.Loader do
       values: type["values"],
       constraints: type["constraints"],
       item_type: normalize_type(type["item_type"], "#{key_prefix}.item_type"),
-      instance_of: type["instance_of"]
+      instance_of: type["instance_of"],
+      # Set for `kind: :embedded_resource` (and top-level `kind: :resource`)
+      # entries — no top-level `actions_by_resource` entry exists for an
+      # embedded type, so it normalizes with none; the generator doesn't
+      # render action stubs for embedded resource mirrors anyway.
+      resource: type["resource"] && normalize_resource(type["resource"], %{})
     }
   end
 

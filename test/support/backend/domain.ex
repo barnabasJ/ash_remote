@@ -2,21 +2,12 @@ defmodule AshRemote.Backend.Domain do
   @moduledoc "Reference backend domain — the RPC-exposed surface for tests."
   use Ash.Domain, extensions: [AshRemote.Rpc]
 
-  resources do
-    resource(AshRemote.Backend.User)
-    resource(AshRemote.Backend.Todo)
-    resource(AshRemote.Backend.Comment)
-    resource(AshRemote.Backend.Note)
-    resource(AshRemote.Backend.RaceItem)
-    resource(AshRemote.Backend.Singleton)
-    resource(AshRemote.Backend.CompositeItem)
-  end
-
   rpc do
     pub_sub(AshRemote.Backend.Endpoint)
 
     resource AshRemote.Backend.Todo do
       expose(:read)
+      expose(:by_status)
       expose(:create)
       expose(:update)
       expose(:destroy)
@@ -68,5 +59,21 @@ defmodule AshRemote.Backend.Domain do
       expose(:update)
       expose(:destroy)
     end
+
+    resource AshRemote.Backend.UpsertOnly do
+      expose(:by_token)
+      expose(:create)
+    end
+  end
+
+  resources do
+    resource AshRemote.Backend.User
+    resource AshRemote.Backend.Todo
+    resource AshRemote.Backend.Comment
+    resource AshRemote.Backend.Note
+    resource AshRemote.Backend.RaceItem
+    resource AshRemote.Backend.Singleton
+    resource AshRemote.Backend.CompositeItem
+    resource AshRemote.Backend.UpsertOnly
   end
 end

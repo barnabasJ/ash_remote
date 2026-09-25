@@ -64,9 +64,19 @@ defmodule AshRemote.L8AuthorizeTest do
   end
 
   describe "read" do
-    test "no actor is denied (deny-by-default under :when_requested)" do
+    test "no actor sees no rows (deny-by-default under :when_requested)" do
+      seed!()
+
       response = Server.run_action(:ash_remote, %{"resource" => @resource, "action" => "read"})
-      assert response["success"] == false
+
+      # `policies.no_filter_static_forbidden_reads?: false` (see
+      # config/config.exs) makes Ash always filter a statically-forbidden
+      # read rather than raise Forbidden — so a denied anonymous read now
+      # comes back `success: true` with zero rows, not `success: false`.
+      # Still proves the same thing: if the server had failed to pass
+      # `authorize?: true`, this would return the seeded row instead.
+      assert response["success"] == true
+      assert response["data"] == []
     end
 
     test "an authorized actor succeeds" do

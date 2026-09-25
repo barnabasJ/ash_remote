@@ -9,12 +9,32 @@ defmodule AshRemote.Backend.RaceItem do
     data_layer: Ash.DataLayer.Ets
 
   ets do
-    private?(false)
+    private? false
+  end
+
+  actions do
+    default_accept [:id, :title]
+    defaults [:read, create: :*]
+
+    # Explicit, not `defaults([:destroy, update: :*])`: this resource's
+    # `unique_id` identity uses `pre_check_with:`, which doesn't support
+    # atomic mode, and `default_actions_require_atomic?: true` would
+    # otherwise require it.
+    update :update do
+      primary? true
+      accept :*
+      require_atomic? false
+    end
+
+    destroy :destroy do
+      primary? true
+      require_atomic? false
+    end
   end
 
   attributes do
-    uuid_primary_key(:id, writable?: true)
-    attribute(:title, :string, public?: true, allow_nil?: false)
+    uuid_primary_key :id, writable?: true
+    attribute :title, :string, public?: true, allow_nil?: false
   end
 
   identities do
@@ -25,11 +45,6 @@ defmodule AshRemote.Backend.RaceItem do
     # at request time — this is what makes the SECOND concurrent create
     # actually observe the first one's row and fail, reproducing the R-7
     # collision instead of silently clobbering it.
-    identity(:unique_id, [:id], pre_check_with: AshRemote.Backend.Domain)
-  end
-
-  actions do
-    default_accept([:id, :title])
-    defaults([:read, :destroy, create: :*, update: :*])
+    identity :unique_id, [:id], pre_check_with: AshRemote.Backend.Domain
   end
 end

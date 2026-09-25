@@ -3,9 +3,10 @@ defmodule AshRemote.RealtimeClient.Domain do
   use Ash.Domain, validate_config_inclusion?: false
 
   resources do
-    resource(AshRemote.RealtimeClient.Todo)
-    resource(AshRemote.RealtimeClient.SecondTodo)
-    resource(AshRemote.RealtimeClient.PubSubTodo)
-    resource(AshRemote.RealtimeClient.Document)
+    resource AshRemote.RealtimeClient.Todo
+    resource AshRemote.RealtimeClient.SecondTodo
+    resource AshRemote.RealtimeClient.PubSubTodo
+    resource AshRemote.RealtimeClient.Document
+    resource AshRemote.RealtimeClient.ReadOnlyTodo
   end
 end

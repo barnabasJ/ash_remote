@@ -109,6 +109,32 @@ if Code.ensure_loaded?(Phoenix.Channel) do
     defp visible?(_payload, %{assigns: %{ash_remote_read_scope: :all}}), do: true
     defp visible?(_payload, %{assigns: %{ash_remote_read_scope: :none}}), do: false
 
+    # `alter_source?: true, run_queries?: false` (in `read_scope/3`) statically
+    # computes a filter without touching the data layer — but for a resource
+    # whose read authorization spans more than one independently-applying
+    # policy (e.g. a `policy_group`-scoped relationship check alongside a
+    # separate, always-applying permission-based policy), Ash can resolve
+    # that combination down to a literal, unconditional `false` filter rather
+    # than the real per-row condition, even for an actor a live query
+    # authorizes correctly (H-realtime-1: confirmed against
+    # `Arcc.Scheduling.Session`, whose worker-scoped `policy_group` combines
+    # with a separate `actor_has_permission` policy this way). Treating that
+    # answer as a genuine "never authorized" would silently and permanently
+    # black-hole every realtime notification for such an actor. Fall back to
+    # the same per-notification authorized re-read already used for a filter
+    # that references data the wire payload doesn't carry — a small
+    # per-notification cost, paid only by resources with this policy shape,
+    # never a wrongful denial.
+    defp visible?(
+           payload,
+           %{assigns: %{ash_remote_read_scope: {:filter, %Ash.Filter{expression: false}}}} =
+             socket
+         ) do
+      resource = socket.assigns.ash_remote_resource
+      record = reconstruct(resource, payload)
+      refetch_visible?(resource, record, socket, payload)
+    end
+
     defp visible?(payload, %{assigns: %{ash_remote_read_scope: {:filter, filter}}} = socket) do
       resource = socket.assigns.ash_remote_resource
       record = reconstruct(resource, payload)
@@ -177,9 +203,13 @@ if Code.ensure_loaded?(Phoenix.Channel) do
     defp refetch_visible?(resource, record, socket, _payload) do
       pkey = Map.take(record, Ash.Resource.Info.primary_key(resource))
 
+      # Same reasoning as `read_scope/3`: the primary read action isn't
+      # necessarily what governs whether this subscriber may see the row
+      # (`realtime_read_action`, when declared, is authoritative for both).
       case Ash.get(resource, pkey,
              actor: socket.assigns[:ash_remote_actor],
              tenant: socket.assigns[:ash_remote_tenant],
+             action: read_action(resource),
              authorize?: true,
              not_found_error?: false
            ) do
@@ -191,8 +221,19 @@ if Code.ensure_loaded?(Phoenix.Channel) do
       _ -> false
     end
 
+    # A resource's primary `:read` doesn't always represent what a realtime
+    # subscriber may see — e.g. a worker-scoped resource whose primary read is
+    # admin-only/unscoped, with worker-visible rows only reachable through a
+    # separate, purpose-built read (`AshRemote.Rpc`'s `realtime_read_action`).
+    # Silently falls back to the primary read when no override is declared —
+    # true for every resource that doesn't need one.
     defp read_action(resource) do
-      Ash.Resource.Info.primary_action!(resource, :read).name
+      domain = Ash.Resource.Info.domain(resource)
+
+      case domain && AshRemote.Rpc.Info.realtime_read_action(domain, resource) do
+        nil -> Ash.Resource.Info.primary_action!(resource, :read).name
+        action -> action
+      end
     end
 
     defp parse_topic(topic) do

@@ -11,50 +11,50 @@ defmodule TodoServer.TodoList do
     notifiers: [AshRemote.Server.Notifier]
 
   ets do
-    private?(false)
+    private? false
+  end
+
+  actions do
+    default_accept [:name, :public]
+
+    read :read, primary?: true
+
+    create :create do
+      primary? true
+      change relate_actor(:user)
+    end
+
+    update :update, primary?: true
+    destroy :destroy, primary?: true
   end
 
   policies do
     # Own it OR it's public → visible + editable by everyone (collaborative).
     policy action_type([:read, :update, :destroy]) do
-      authorize_if(relates_to_actor_via(:user))
-      authorize_if(expr(public == true))
+      authorize_if relates_to_actor_via(:user)
+      authorize_if expr(public == true)
     end
 
     policy action_type(:create) do
-      authorize_if(actor_present())
+      authorize_if actor_present()
     end
   end
 
   attributes do
-    uuid_primary_key(:id)
-    attribute(:name, :string, public?: true, allow_nil?: false)
+    uuid_primary_key :id
+    attribute :name, :string, public?: true, allow_nil?: false
     # Public lists are visible to (and replicated to) every user.
-    attribute(:public, :boolean, public?: true, default: false, allow_nil?: false)
-    create_timestamp(:inserted_at, public?: true)
+    attribute :public, :boolean, public?: true, default: false, allow_nil?: false
+    create_timestamp :inserted_at, public?: true
   end
 
   relationships do
     # Private: ownership is enforced server-side; the client never sees the owner.
     belongs_to :user, TodoServer.Accounts.User do
-      allow_nil?(false)
+      allow_nil? false
     end
 
-    has_many(:todos, TodoServer.Todo, public?: true, destination_attribute: :list_id)
-  end
-
-  actions do
-    default_accept([:name, :public])
-
-    read(:read, primary?: true)
-
-    create :create do
-      primary?(true)
-      change(relate_actor(:user))
-    end
-
-    update(:update, primary?: true)
-    destroy(:destroy, primary?: true)
+    has_many :todos, TodoServer.Todo, public?: true, destination_attribute: :list_id
   end
 
   aggregates do

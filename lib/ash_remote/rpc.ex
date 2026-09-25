@@ -15,7 +15,14 @@ end
 
 defmodule AshRemote.Rpc.ResourceEntry do
   @moduledoc false
-  defstruct [:resource, :__spark_metadata__, expose: [], publish: [], no_publish: []]
+  defstruct [
+    :resource,
+    :realtime_read_action,
+    :__spark_metadata__,
+    expose: [],
+    publish: [],
+    no_publish: []
+  ]
 end
 
 defmodule AshRemote.Rpc do
@@ -99,7 +106,20 @@ defmodule AshRemote.Rpc do
     args: [:resource],
     entities: [expose: [@expose], publish: [@publish], no_publish: [@no_publish]],
     schema: [
-      resource: [type: {:spark, Ash.Resource}, required: true, doc: "The resource being exposed."]
+      resource: [type: {:spark, Ash.Resource}, required: true, doc: "The resource being exposed."],
+      realtime_read_action: [
+        type: :atom,
+        required: false,
+        doc:
+          "The read action `AshRemote.Server.Channel` uses to compute a subscriber's " <>
+            "per-record visibility filter (`Ash.can/3` against this action's policies). " <>
+            "Defaults to the resource's primary read action — override this when the " <>
+            "primary read doesn't represent what a realtime subscriber may see (e.g. " <>
+            "the primary `:read` is admin-only/unscoped, and worker-visible rows are " <>
+            "only reachable through a separate, purpose-built read like `scheduled_between`). " <>
+            "Without this, every notification silently resolves to invisible for such a " <>
+            "subscriber (the primary action's policy denies them), not a crash — easy to miss."
+      ]
     ]
   }
 

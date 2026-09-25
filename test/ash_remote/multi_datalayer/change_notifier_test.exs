@@ -35,12 +35,24 @@ defmodule AshRemote.MultiDatalayer.ChangeNotifierTest do
 
   defp entry_ids, do: CachedThing |> Coverage.entries(nil) |> MapSet.new(& &1.id)
 
-  test "ProvenCoverage: an update notification drops coverage the changed row matches" do
+  # What ProvenCoverage guarantees for an inbound change is *conservative*:
+  # `handle_external_change/2` calls `AshMultiDatalayer.forget!/3`, which probes
+  # the ledger with a PK-only *unknown* row — this node never performed the
+  # write, so it has no trustworthy before-image — and MDL's
+  # `Invalidation.should_drop?/3` treats an unknown evaluation as a drop. So
+  # every entry whose filter the changed row *could* match (anything predicated
+  # on a non-PK field) is dropped and the row is physically evicted; the only
+  # entry guaranteed to survive is one decidable from the PK alone (a point
+  # query on a *different* PK). MDL tried the precise variant and reverted it
+  # (its own `forget_test.exs` covers the stale-entry survival bug it
+  # reintroduces) — see the comment above
+  # `AshMultiDatalayer.Orchestrator.ProvenCoverage.handle_external_change/2`.
+  test "ProvenCoverage: an update notification drops the coverage the changed row matches and evicts the row" do
     foo = Ash.create!(CachedThing, %{name: "foo", status: :open})
-    Ash.create!(CachedThing, %{name: "bar", status: :open})
+    bar = Ash.create!(CachedThing, %{name: "bar", status: :open})
 
     foo_id = warm(Ash.Query.filter(CachedThing, name == "foo"))
-    bar_id = warm(Ash.Query.filter(CachedThing, name == "bar"))
+    bar_pk_id = warm(Ash.Query.filter(CachedThing, id == ^bar.id))
 
     updated = %{foo | status: :done}
     notification = Notifications.build(CachedThing, :update, updated)
@@ -49,14 +61,22 @@ defmodule AshRemote.MultiDatalayer.ChangeNotifierTest do
 
     remaining = entry_ids()
     refute foo_id in remaining, "the name == \"foo\" entry (foo still matches) must be dropped"
-    assert bar_id in remaining, "the unrelated name == \"bar\" entry must survive"
+
+    assert bar_pk_id in remaining,
+           "a point query on a different PK is decidable without a before-image and must survive"
+
+    # Physically evicted, not just un-covered: both of `CachedThing`'s layers
+    # resolve to the same Ets store (see the fixture's moduledoc), so the
+    # evicted row is simply gone — no refetch can bring it back here.
+    assert [] = CachedThing |> Ash.Query.filter(id == ^foo.id) |> Ash.read!()
+    assert [_] = CachedThing |> Ash.Query.filter(id == ^bar.id) |> Ash.read!()
   end
 
-  test "ProvenCoverage: a create notification only invalidates entries the new row now matches" do
-    Ash.create!(CachedThing, %{name: "bar", status: :open})
+  test "ProvenCoverage: a create notification drops the coverage the new row now matches" do
+    bar = Ash.create!(CachedThing, %{name: "bar", status: :open})
 
-    open_id = warm(Ash.Query.filter(CachedThing, status == :open))
     done_id = warm(Ash.Query.filter(CachedThing, status == :done))
+    bar_pk_id = warm(Ash.Query.filter(CachedThing, id == ^bar.id))
 
     new_row = %CachedThing{id: Ash.UUID.generate(), name: "qux", status: :done}
     notification = Notifications.build(CachedThing, :create, new_row)
@@ -64,8 +84,8 @@ defmodule AshRemote.MultiDatalayer.ChangeNotifierTest do
     assert :ok = ChangeNotifier.notify(notification)
 
     remaining = entry_ids()
-    assert open_id in remaining, "status == :open is untouched by a new :done row"
     refute done_id in remaining, "status == :done's \"zero rows\" claim is now false"
+    assert bar_pk_id in remaining, "a point query on an unrelated PK must survive"
   end
 
   test "notify/1 never raises, even for a malformed notification" do

@@ -1,10 +1,10 @@
-defmodule AshRemote.Gen.Validations do
+defmodule AshCloner.Validations do
   @moduledoc """
   Sugar rendering and form-insensitive identity for mirrored validations.
 
   Validations exist in two spellings: the `Ash.Resource.Validation.Builtins`
   sugar people write (`string_length(:title, min: 3)`) and the `{Module, opts}`
-  tuple it expands to. `sugar/2` renders the manifest's tuple back into the
+  tuple it expands to. `sugar/2` renders a published tuple back into the
   sugar — but only when *calling the builtin actually reproduces the opts*,
   so the rendering can never be lossy. `identity/1` canonicalizes a `validate`
   statement's AST (either spelling, any option order, `~r//` or Spark's lazy
@@ -100,7 +100,7 @@ defmodule AshRemote.Gen.Validations do
   end
 
   # The check that keeps sugar honest: the rendered call, executed, must
-  # produce the exact opts the manifest published.
+  # produce the exact opts the source definition published.
   defp verified?(fun, args, module, opts) do
     args = Enum.reject(args, &(&1 == []))
 

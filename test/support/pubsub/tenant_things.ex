@@ -11,22 +11,22 @@ defmodule AshRemote.PubSubFixture.AttrTenantThing do
     notifiers: [AshRemote.Server.Notifier]
 
   ets do
-    private?(false)
-  end
-
-  multitenancy do
-    strategy(:attribute)
-    attribute(:org_id)
-  end
-
-  attributes do
-    uuid_primary_key(:id)
-    attribute(:org_id, :string, public?: true, allow_nil?: false)
-    attribute(:title, :string, public?: true)
+    private? false
   end
 
   actions do
-    defaults([:read, :destroy, create: :*, update: :*])
+    defaults [:read, :destroy, create: :*, update: :*]
+  end
+
+  multitenancy do
+    strategy :attribute
+    attribute :org_id
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :org_id, :string, public?: true, allow_nil?: false
+    attribute :title, :string, public?: true
   end
 end
 
@@ -45,20 +45,20 @@ defmodule AshRemote.PubSubFixture.CtxTenantThing do
     notifiers: [AshRemote.Server.Notifier]
 
   ets do
-    private?(false)
-  end
-
-  multitenancy do
-    strategy(:context)
-    global?(true)
-  end
-
-  attributes do
-    uuid_primary_key(:id)
-    attribute(:title, :string, public?: true)
+    private? false
   end
 
   actions do
-    defaults([:read, :destroy, create: :*, update: :*])
+    defaults [:read, :destroy, create: :*, update: :*]
+  end
+
+  multitenancy do
+    strategy :context
+    global? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :title, :string, public?: true
   end
 end

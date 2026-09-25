@@ -597,11 +597,21 @@ defmodule AshRemote.Server do
   end
 
   defp format_error(error) do
-    %{
-      "type" => error_type(error),
-      "message" => safe_message(error),
-      "path" => error |> path() |> Enum.map(&to_string/1)
-    }
+    case AshRemote.Server.ErrorFormatter.format(error) do
+      %{message: message} = custom ->
+        %{
+          "type" => Map.get(custom, :type, error_type(error)),
+          "message" => message,
+          "path" => error |> path() |> Enum.map(&to_string/1)
+        }
+
+      nil ->
+        %{
+          "type" => error_type(error),
+          "message" => safe_message(error),
+          "path" => error |> path() |> Enum.map(&to_string/1)
+        }
+    end
   end
 
   defp error_type(%mod{}) do

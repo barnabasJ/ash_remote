@@ -130,8 +130,9 @@ defmodule AshRemote.DataLayer do
     body =
       Protocol.build_run(%{
         resource: cfg.source,
-        action: read_action_name(resource, cfg),
+        action: query_action_name(query, resource, cfg),
         fields: fields,
+        input: query_arguments(query),
         filter: Filter.encode(query.filter),
         sort: Sort.encode(query.sort),
         page: Pagination.encode(query),
@@ -205,6 +206,16 @@ defmodule AshRemote.DataLayer do
   # (absent). Idempotent under flush retries — a re-flushed create finds its
   # row and updates instead of colliding.
   #
+  # `server_upserts?` (see `AshRemote.Resource.Section`) skips all of this:
+  # `remote_identity_row/3` dispatches an actual read against the backend,
+  # which needs a primary read action (`read_action_name/2`) to pick — a
+  # resource whose only exposed reads are purpose-built/argument-gated (no
+  # unfiltered list, common for a worker-scoped resource that must never leak
+  # other workers' rows) has none, and this whole read-then-write strategy
+  # can't run at all. When the remote's own create is already an idempotent
+  # upsert (a client-identity `upsert_fields: []`, e.g.), there's nothing to
+  # pre-check — every flush is just a create.
+  #
   # Backfill hands us an action-less changeset (attributes force-changed,
   # `data` empty), so set the resource's primary write action and, for the
   # update path, address the row by the FOUND row's actual primary key (H2
@@ -222,12 +233,16 @@ defmodule AshRemote.DataLayer do
   # retry's read and its update could still race) — a true fix needs a
   # server-side identity upsert, filed as a follow-up against the protocol.
   def upsert(resource, changeset, keys) do
-    keys = if keys in [nil, []], do: Ash.Resource.Info.primary_key(resource), else: keys
+    if AshRemote.Resource.Info.remote_server_upserts?(resource) do
+      create(resource, put_write_action(resource, changeset, :create))
+    else
+      keys = if keys in [nil, []], do: Ash.Resource.Info.primary_key(resource), else: keys
 
-    case remote_identity_row(resource, changeset, keys) do
-      {:ok, nil} -> create_or_retry_as_update(resource, changeset, keys)
-      {:ok, row} -> update(resource, put_write_action(resource, changeset, :update, row))
-      {:error, error} -> {:error, error}
+      case remote_identity_row(resource, changeset, keys) do
+        {:ok, nil} -> create_or_retry_as_update(resource, changeset, keys)
+        {:ok, row} -> update(resource, put_write_action(resource, changeset, :update, row))
+        {:error, error} -> {:error, error}
+      end
     end
   end
 
@@ -266,7 +281,7 @@ defmodule AshRemote.DataLayer do
 
     changeset = %{
       changeset
-      | action: changeset.action || Ash.Resource.Info.primary_action!(resource, :create)
+      | action: changeset.action || resolve_write_action!(resource, :create)
     }
 
     if replicated?, do: mark_replicated_write(changeset), else: changeset
@@ -285,10 +300,36 @@ defmodule AshRemote.DataLayer do
 
     %{
       changeset
-      | action: Ash.Resource.Info.primary_action!(resource, :update),
+      | action: resolve_write_action!(resource, :update),
         data: data
     }
     |> mark_replicated_write()
+  end
+
+  # `Ash.Resource.Info.primary_action!/2` hard-requires an explicit
+  # `primary?: true` — a convention plenty of real resources don't follow
+  # when they only have one action of a type (nothing about calling it by
+  # name needs `primary?`). Fall back to the sole action of that type when
+  # it's unambiguous; only raise when there's genuinely more than one and
+  # none is marked primary.
+  defp resolve_write_action!(resource, type) do
+    case Ash.Resource.Info.primary_action(resource, type) do
+      nil ->
+        case Enum.filter(Ash.Resource.Info.actions(resource), &(&1.type == type)) do
+          [action] ->
+            action
+
+          [] ->
+            raise "Required a #{type} action for #{inspect(resource)}, but it has none."
+
+          _ ->
+            raise "Required primary #{type} action for #{inspect(resource)} — multiple " <>
+                    "#{type} actions exist and none is marked primary?: true."
+        end
+
+      action ->
+        action
+    end
   end
 
   defp mark_replicated_write(changeset) do
@@ -508,6 +549,34 @@ defmodule AshRemote.DataLayer do
     end
   end
 
+  # Found generating client resources from a real arcc-center manifest: a
+  # resource whose only read action isn't primary (the common case for a
+  # resource exposing one purpose-built read, e.g. `by_session`, rather than
+  # an unfiltered "list everything") always ran `read_action_name/2`'s
+  # primary-action lookup regardless of which action `Ash.Query.for_read/3`
+  # actually selected — either silently running the wrong action (if some
+  # other action happened to be primary) or raising "has no primary read
+  # action" outright. `query.context.action` is the query's real selected
+  # action, populated by Ash's own generic read pipeline — `get?/1` above
+  # already relies on the same field being present. Prefer it; fall back to
+  # primary-action resolution only if it's somehow unset (defensive, not the
+  # expected path).
+  defp query_action_name(%Query{context: %{action: %{name: name}}}, _resource, cfg),
+    do: map_action(name, cfg)
+
+  defp query_action_name(_query, resource, cfg), do: read_action_name(resource, cfg)
+
+  # See `AshRemote.CaptureArguments` (a preparation the generator adds to
+  # every read action) — the query's caller-supplied argument values, stashed
+  # in context there since no `Ash.DataLayer` callback receives them
+  # directly. Same string-keying convention as `input/1` (writes).
+  defp query_arguments(%Query{context: %{ash_remote_arguments: arguments}})
+       when is_map(arguments) and map_size(arguments) > 0 do
+    Map.new(arguments, fn {k, v} -> {to_string(k), v} end)
+  end
+
+  defp query_arguments(_query), do: nil
+
   defp map_action(name, cfg) do
     cfg |> Map.get(:action_map, %{}) |> Map.get(name, name) |> to_string()
   end
@@ -529,7 +598,11 @@ defmodule AshRemote.DataLayer do
   # never silently make a write retriable.
   defp request(cfg, path, body, extra_headers, opts) do
     idempotent? = Keyword.fetch!(opts, :idempotent?)
-    transport = Map.get(cfg, :transport) || Config.new(base_url: Map.fetch!(cfg, :base_url))
+
+    transport =
+      Map.get(cfg, :transport) ||
+        Config.new(base_url: Map.fetch!(cfg, :base_url), module: transport_module())
+
     transport = %{transport | headers: merge_headers(transport.headers, extra_headers)}
     transport = if idempotent?, do: transport, else: %{transport | retry: false}
     module = transport.module || Transport.Req
@@ -658,6 +731,19 @@ defmodule AshRemote.DataLayer do
 
     resource_base_url || Application.get_env(:ash_remote, :base_url) ||
       raise "no base_url: set `config :ash_remote, :base_url` or the resource's remote base_url"
+  end
+
+  # A generated (`remote do ... end`-declared) resource's config never carries
+  # a `:transport` key at all (only the older, hand-authored `Application.get_env
+  # (:ash_remote, :remote_config)` resource style can set one directly on its own
+  # config map) — so there was previously no way to swap the transport for a
+  # generated resource under test, at all. `config :ash_remote, :transport_module`
+  # is a global override every resource's default `Config.new/1` picks up,
+  # mirroring the existing `base_url` app-env fallback above — set it to a
+  # `Mox.defmock(_, for: AshRemote.Transport)` module in `config/test.exs` to
+  # stub every RPC call without touching the network.
+  defp transport_module do
+    Application.get_env(:ash_remote, :transport_module, Transport.Req)
   end
 
   defp maybe_put(map, _key, nil), do: map

@@ -12,21 +12,11 @@ defmodule AshRemote.Backend.Note do
     notifiers: [AshRemote.Server.Notifier]
 
   ets do
-    private?(false)
+    private? false
   end
 
-  multitenancy do
-    strategy(:context)
-    # global?: true only so the test harness's untenanted `reset!/0` sweep
-    # (`Ash.read!(resource)` with no tenant, run for every backend resource)
-    # can see and clean up rows across tenants — every assertion in the R-1
-    # regression test itself always passes an explicit tenant.
-    global?(true)
-  end
-
-  attributes do
-    uuid_primary_key(:id)
-    attribute(:text, :string, public?: true, allow_nil?: false)
+  actions do
+    defaults [:read, :destroy, create: :*, update: :*]
   end
 
   validations do
@@ -35,11 +25,21 @@ defmodule AshRemote.Backend.Note do
     # reach `Ash.Changeset.for_create` inside `Server.validate_action`,
     # independently of `/rpc/run`" (R-1). Gated on a magic input value so it
     # never interferes with ordinary creates/updates.
-    validate({AshRemote.Backend.Note.EchoTenant, []})
+    validate {AshRemote.Backend.Note.EchoTenant, []}
   end
 
-  actions do
-    defaults([:read, :destroy, create: :*, update: :*])
+  multitenancy do
+    strategy :context
+    # global?: true only so the test harness's untenanted `reset!/0` sweep
+    # (`Ash.read!(resource)` with no tenant, run for every backend resource)
+    # can see and clean up rows across tenants — every assertion in the R-1
+    # regression test itself always passes an explicit tenant.
+    global? true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :text, :string, public?: true, allow_nil?: false
   end
 end
 

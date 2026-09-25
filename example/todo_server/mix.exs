@@ -52,7 +52,11 @@ defmodule TodoServer.MixProject do
       {:phoenix_pubsub, "~> 2.1"},
       {:plug, "~> 1.16"},
       {:bandit, "~> 1.5"},
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
+      # Spark.Formatter (mix format plugin, below) needs it to parse/patch source.
+      # No `only:` restriction: igniter already depends on it unrestricted, and
+      # mix rejects divergent `only:` values for the same dep.
+      {:sourceror, "~> 1.8"}
     ]
   end
 end

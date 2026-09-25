@@ -11,23 +11,23 @@ defmodule AshRemote.Backend.Singleton do
     data_layer: Ash.DataLayer.Ets
 
   ets do
-    private?(false)
-  end
-
-  attributes do
-    uuid_primary_key(:id)
-    attribute(:name, :string, public?: true, allow_nil?: false)
+    private? false
   end
 
   actions do
-    default_accept([:name])
+    default_accept [:name]
 
     read :read do
-      primary?(true)
-      get?(true)
+      primary? true
+      get? true
     end
 
-    create(:create, primary?: true)
-    destroy(:destroy, primary?: true)
+    create :create, primary?: true
+    destroy :destroy, primary?: true
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true, allow_nil?: false
   end
 end

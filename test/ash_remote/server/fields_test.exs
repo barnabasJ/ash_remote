@@ -23,4 +23,55 @@ defmodule AshRemote.Server.FieldsTest do
 
     assert Fields.serialize(record, Todo, ["title"]) == %{"title" => nil}
   end
+
+  describe "microsecond-precision dump regression (H-utc-precision)" do
+    # A `:utc_datetime`-declared calculation's raw computed value isn't
+    # guaranteed to already be a canonical instance of the type — an
+    # expression-based calc backed by a raw DB fragment hands back whatever
+    # the driver decoded (Postgrex always carries `{0, 6}` microsecond
+    # precision on a `timestamptz`, even when every digit is zero).
+    # `Ecto.Type.dump/2` for `:utc_datetime` requires literal `{0, 0}` and
+    # raises `ArgumentError` otherwise — this crashed a real `/ash_remote/rpc`
+    # request end to end (arcc-center's `Session.start_datetime`/
+    # `end_datetime`, both `:utc_datetime`-typed `remote(...)` mirrors).
+    test "a calc value with non-empty (but zero) microsecond precision serializes without crashing" do
+      raw = %DateTime{
+        DateTime.utc_now()
+        | microsecond: {0, 6},
+          year: 2024,
+          month: 1,
+          day: 1,
+          hour: 0,
+          minute: 0,
+          second: 0
+      }
+
+      record = %Todo{id: "1", calculations: %{fixed_point_in_time: raw}}
+
+      result = Fields.serialize(record, Todo, ["fixed_point_in_time"])
+
+      assert %{"fixed_point_in_time" => %DateTime{microsecond: {0, 0}}} = result
+      assert Jason.encode!(result) =~ ~s("fixed_point_in_time":"2024-01-01T00:00:00Z")
+    end
+
+    test "a calc value already at {0, 0} precision still serializes correctly" do
+      raw = %DateTime{
+        DateTime.utc_now()
+        | microsecond: {0, 0},
+          year: 2024,
+          month: 1,
+          day: 1,
+          hour: 0,
+          minute: 0,
+          second: 0
+      }
+
+      record = %Todo{id: "1", calculations: %{fixed_point_in_time: raw}}
+
+      result = Fields.serialize(record, Todo, ["fixed_point_in_time"])
+
+      assert %{"fixed_point_in_time" => %DateTime{microsecond: {0, 0}}} = result
+      assert Jason.encode!(result) =~ ~s("fixed_point_in_time":"2024-01-01T00:00:00Z")
+    end
+  end
 end

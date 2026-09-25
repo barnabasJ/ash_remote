@@ -9,70 +9,73 @@ defmodule TodoClient.Remote.TodoList do
     domain: TodoClient.Remote.Domain,
     data_layer: AshMultiDatalayer.DataLayer,
     extensions: [AshRemote.DataLayer],
-    notifiers: [AshRemote.MultiDatalayer.ChangeNotifier, TodoClient.RealtimeBridge]
+    notifiers: [AshRemote.MultiDatalayer.ChangeNotifier, TodoClient.RealtimeBridge],
+    # Mirrored from the manifest, not hand-authored: the primary read carries
+    # the server's validations, which Ash's primary-read verifier flags as a
+    # likely mistake. `mix ash_remote.gen` emits this on every resource now.
+    primary_read_warning?: false
 
   multi_data_layer do
-    layer(:cache, Ash.DataLayer.Ets)
-    layer(:remote, AshRemote.DataLayer)
+    layer :cache, Ash.DataLayer.Ets
+    layer :remote, AshRemote.DataLayer
 
-    read_order([:cache, :remote])
-    write_order([:remote, :cache])
+    read_order [:cache, :remote]
+    write_order [:remote, :cache]
 
     fold_aggregate_overrides([:completed_count])
   end
 
   remote do
-    source("TodoServer.TodoList")
-    schema_version("1.0.0")
-    realtime?(true)
-  end
-
-  attributes do
-    uuid_primary_key(:id)
-    attribute(:inserted_at, :utc_datetime_usec, public?: true)
-    attribute(:name, :string, public?: true, allow_nil?: false)
-    attribute(:public, :boolean, public?: true)
-  end
-
-  relationships do
-    has_many(:todos, TodoClient.Remote.Todo,
-      public?: true,
-      source_attribute: :id,
-      destination_attribute: :list_id
-    )
-  end
-
-  aggregates do
-    count :completed_count, :todos do
-      public?(true)
-      filter(expr(completed))
-    end
-
-    count :todo_count, :todos do
-      public?(true)
-    end
+    source "TodoServer.TodoList"
+    schema_version "1.0.0"
+    realtime? true
   end
 
   actions do
     create :create do
-      primary?(true)
-      accept([:name, :public])
+      primary? true
+      accept [:name, :public]
     end
 
     destroy :destroy do
-      primary?(true)
-      require_atomic?(false)
+      primary? true
+      require_atomic? false
     end
 
     read :read do
-      primary?(true)
-      prepare(AshRemote.PrefetchCalculations)
+      primary? true
+      prepare AshRemote.PrefetchCalculations
     end
 
     update :update do
-      primary?(true)
-      require_atomic?(false)
-      accept([:name, :public])
+      primary? true
+      require_atomic? false
+      accept [:name, :public]
+    end
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :inserted_at, :utc_datetime_usec, public?: true
+    attribute :name, :string, public?: true, allow_nil?: false
+    attribute :public, :boolean, public?: true
+  end
+
+  relationships do
+    has_many :todos, TodoClient.Remote.Todo,
+      public?: true,
+      source_attribute: :id,
+      destination_attribute: :list_id
+  end
+
+  aggregates do
+    count :completed_count, :todos do
+      public? true
+      filter expr(completed)
+    end
+
+    count :todo_count, :todos do
+      public? true
     end
   end
 end

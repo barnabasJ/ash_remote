@@ -4,18 +4,18 @@ defmodule AshRemote.Client.Comment do
     domain: AshRemote.Client.Domain,
     data_layer: AshRemote.DataLayer
 
+  actions do
+    defaults [:read, :destroy, create: :*, update: :*]
+  end
+
   attributes do
-    uuid_primary_key(:id)
-    attribute(:body, :string, public?: true, allow_nil?: false)
-    attribute(:rating, :decimal, public?: true)
+    uuid_primary_key :id
+    attribute :body, :string, public?: true, allow_nil?: false
+    attribute :rating, :decimal, public?: true
   end
 
   relationships do
-    belongs_to(:todo, AshRemote.Client.Todo, public?: true, attribute_writable?: true)
-    belongs_to(:user, AshRemote.Client.User, public?: true, attribute_writable?: true)
-  end
-
-  actions do
-    defaults([:read, :destroy, create: :*, update: :*])
+    belongs_to :todo, AshRemote.Client.Todo, public?: true, attribute_writable?: true
+    belongs_to :user, AshRemote.Client.User, public?: true, attribute_writable?: true
   end
 end

@@ -13,24 +13,19 @@ defmodule AshRemote.Backend.WhenRequestedThing do
     authorizers: [Ash.Policy.Authorizer]
 
   ets do
-    private?(false)
-  end
-
-  attributes do
-    uuid_primary_key(:id)
-    attribute(:name, :string, public?: true, allow_nil?: false)
+    private? false
   end
 
   actions do
-    default_accept([:name])
-    defaults([:read, :create, :update, :destroy])
+    default_accept [:name]
+    defaults [:read, :create, :update, :destroy]
   end
 
   policies do
     # Read: any present actor may read (deny-by-default still applies —
     # nil/absent actor is forbidden, exercising the read-path denial).
     policy action_type(:read) do
-      authorize_if(actor_present())
+      authorize_if actor_present()
     end
 
     # Create/update/destroy: only role: :admin may mutate. A non-admin
@@ -39,22 +34,19 @@ defmodule AshRemote.Backend.WhenRequestedThing do
     # Ash.update!/1 / Ash.destroy!/1 / Ash.create!/1 themselves run with
     # authorize?: true, not just that the fetch-helper's read succeeded.
     policy action_type([:create, :update, :destroy]) do
-      authorize_if(actor_attribute_equals(:role, :admin))
+      authorize_if actor_attribute_equals(:role, :admin)
     end
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :name, :string, public?: true, allow_nil?: false
   end
 end
 
 defmodule AshRemote.Backend.WhenRequestedDomain do
   @moduledoc "L8 fixture domain: `authorize :when_requested`, exposing WhenRequestedThing over RPC."
   use Ash.Domain, extensions: [AshRemote.Rpc], validate_config_inclusion?: false
-
-  authorization do
-    authorize(:when_requested)
-  end
-
-  resources do
-    resource(AshRemote.Backend.WhenRequestedThing)
-  end
 
   rpc do
     resource AshRemote.Backend.WhenRequestedThing do
@@ -63,5 +55,13 @@ defmodule AshRemote.Backend.WhenRequestedDomain do
       expose(:update)
       expose(:destroy)
     end
+  end
+
+  resources do
+    resource AshRemote.Backend.WhenRequestedThing
+  end
+
+  authorization do
+    authorize :when_requested
   end
 end

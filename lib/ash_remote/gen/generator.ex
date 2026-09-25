@@ -25,14 +25,14 @@ defmodule AshRemote.Gen do
   alias AshRemote.Gen.Identifier
   alias AshRemote.Manifest
 
-  # The full closed vocabulary of Ash aggregate kinds — mirrors
-  # `Mix.Tasks.AshRemote.Gen.@aggregate_calls`. `field.aggregate_kind` is
-  # rendered as a bare *function call name*, not an atom literal, so — unlike
-  # the `:#{name}`-style splices `Identifier.validate_name!/2` guards — an
+  # The full closed vocabulary of Ash aggregate kinds — the same table the
+  # apply engine walks. `field.aggregate_kind` is rendered as a bare
+  # *function call name*, not an atom literal, so — unlike the
+  # `:#{name}`-style splices `Identifier.validate_name!/2` guards — an
   # arbitrary-but-atom-shaped value isn't enough; it must be one of the
   # specific calls `aggregates do ... end` actually supports (see
   # `validate_aggregate_kind!/1`).
-  @aggregate_kinds ~w(count sum avg min max first list exists custom)a
+  @aggregate_kinds AshCloner.Sections.aggregate_calls()
 
   @doc """
   Generate module definitions from a manifest.
@@ -53,7 +53,7 @@ defmodule AshRemote.Gen do
       manifest.types |> Enum.reject(fn {module, _} -> builtin_type?(module) end) |> Map.new()
 
     modules = Map.keys(manifest.resources) ++ Map.keys(custom_types)
-    prefix = common_prefix(modules)
+    prefix = AshCloner.Namespace.common_prefix(modules)
 
     ctx = %{
       namespace: namespace,
@@ -85,11 +85,34 @@ defmodule AshRemote.Gen do
 
           "  use Ash.Type.Enum, values: [#{values}]"
 
+        :embedded_resource ->
+          gen_embedded_resource_body(type.resource, ctx)
+
         subtype ->
           "  use Ash.Type.NewType, subtype_of: #{inspect(subtype)}"
       end
 
-    %{module: module, kind: :type, source: "defmodule #{module} do\n#{body}\nend\n"}
+    AshCloner.Definition.new(
+      module: module,
+      kind: :type,
+      source: "defmodule #{module} do\n#{body}\nend\n"
+    )
+  end
+
+  # An embedded resource is a data container, not a callable resource — no
+  # domain, no actions, no `remote` block: it's cast entirely locally as part
+  # of whatever parent attribute references it. Only attributes are rendered.
+  defp gen_embedded_resource_body(resource, ctx) do
+    entities =
+      resource
+      |> attribute_fields()
+      |> Enum.map(fn {name, field} ->
+        {String.to_atom(name), attribute_line(name, field, ctx)}
+      end)
+
+    attributes = section(:attributes, entities, always?: true)
+
+    "  use Ash.Resource, data_layer: :embedded\n\n#{attributes}"
   end
 
   # --- resources -----------------------------------------------------------
@@ -103,7 +126,7 @@ defmodule AshRemote.Gen do
     validations = section(:validations, entities.validations, gap?: true)
     calculations = section(:calculations, entities.calculations, gap?: true)
     aggregates = section(:aggregates, entities.aggregates, gap?: true)
-    actions = gen_actions(res)
+    actions = gen_actions(res, ctx)
     remote = gen_remote(res, ctx)
 
     source =
@@ -111,7 +134,11 @@ defmodule AshRemote.Gen do
       defmodule #{module} do
         use Ash.Resource,
           domain: #{ctx.domain},
-          data_layer: AshRemote.DataLayer
+          data_layer: AshRemote.DataLayer,
+          # Generated actions are manifest-mirrored stubs, not hand-authored
+          # primary reads — the "did you mean to put preparations/arguments on
+          # your primary read?" warning this silences never applies to them.
+          primary_read_warning?: false
 
       #{remote}
 
@@ -121,7 +148,7 @@ defmodule AshRemote.Gen do
       end
       """
 
-    %{module: module, kind: :resource, source: source, entities: entities}
+    AshCloner.Definition.new(module: module, kind: :resource, source: source, entities: entities)
   end
 
   # Per-section `{name, code}` snippets — the unit of non-destructive
@@ -162,9 +189,22 @@ defmodule AshRemote.Gen do
         reproducible_aggregate?(field, res.relationships)
       end)
 
+    # What a mirrored calculation's expression is allowed to reference — every
+    # attribute this generation run emits, plus every aggregate it's *actually
+    # emitting as a native aggregate* (not just any public aggregate on the
+    # manifest). `AshRemote.Expression.encode/2` already checked the
+    # expression is publish-time safe on the server; this is the client-side
+    # half `calculation_block/4` re-verifies before trusting it — see
+    # `AshRemote.Expression`'s moduledoc.
+    locally_available_names =
+      MapSet.new(
+        Enum.map(attributes, fn {name, _line} -> name end) ++
+          Enum.map(native_aggregates, fn {name, _field} -> String.to_atom(name) end)
+      )
+
     calculations =
       Enum.map(calc_like, fn {name, field} ->
-        {String.to_atom(name), calculation_block(name, field, pk, ctx)}
+        {String.to_atom(name), calculation_block(name, field, pk, locally_available_names, ctx)}
       end)
 
     aggregates =
@@ -175,7 +215,7 @@ defmodule AshRemote.Gen do
     actions =
       res.actions
       |> Enum.reject(&(&1.type == :action))
-      |> Enum.map(fn action -> {String.to_atom(action.name), action_block(action, res)} end)
+      |> Enum.map(fn action -> {String.to_atom(action.name), action_block(action, res, ctx)} end)
 
     %{
       attributes: attributes,
@@ -245,7 +285,7 @@ defmodule AshRemote.Gen do
   # the always-correct `{Module, opts}` tuple form.
   defp validation_ref(module_string, opts_code) do
     with {:ok, opts} <- AshRemote.Literal.eval(opts_code),
-         {:ok, call} <- AshRemote.Gen.Validations.sugar(module_string, opts) do
+         {:ok, call} <- AshCloner.Validations.sugar(module_string, opts) do
       call
     else
       _ -> "{#{module_string}, #{opts_code}}"
@@ -329,13 +369,50 @@ defmodule AshRemote.Gen do
         "belongs_to :#{name}, #{dest}, public?: true, attribute_writable?: true#{attrs}#{fk_opts}"
 
       :has_many ->
-        "has_many :#{name}, #{dest}, public?: true#{attrs}"
+        render_to_one_or_many(:has_many, name, dest, rel, attrs, ctx)
 
       :has_one ->
-        "has_one :#{name}, #{dest}, public?: true#{attrs}"
+        render_to_one_or_many(:has_one, name, dest, rel, attrs, ctx)
 
       _ ->
         ""
+    end
+  end
+
+  # A `has_one`/`has_many`'s `destination_attribute` must literally exist on
+  # the destination resource for Ash's `ValidateRelationshipAttributes`
+  # verifier to accept it — but the manifest can (correctly) describe a
+  # relationship whose destination attribute isn't independently public on
+  # that destination's own entry (e.g. an inverse `has_many` is public while
+  # the owning `belongs_to`'s raw FK isn't) — Ash's manifest generator does
+  # not guarantee the two sides stay symmetric. Rendering it anyway emits a
+  # `has_one`/`has_many` the generated destination module can never satisfy,
+  # breaking compilation. Skip with an explanatory comment instead — the
+  # relationship info is asymmetric in the source of truth, not a generator
+  # defect to paper over with a guess.
+  defp render_to_one_or_many(kind, name, dest, rel, attrs, ctx) do
+    if resolvable_destination_attribute?(rel, ctx) do
+      call = if kind == :has_many, do: "has_many", else: "has_one"
+      "#{call} :#{name}, #{dest}, public?: true#{attrs}"
+    else
+      "# Skipped :#{name} (#{kind}, #{dest}) — destination_attribute " <>
+        "#{inspect(rel.destination_attribute)} isn't public on the destination " <>
+        "resource's own manifest entry, so it can't be validated here."
+    end
+  end
+
+  defp resolvable_destination_attribute?(%{destination_attribute: nil}, _ctx), do: true
+
+  defp resolvable_destination_attribute?(rel, ctx) do
+    case Map.get(ctx.manifest.resources, rel.destination) do
+      nil ->
+        false
+
+      dest_res ->
+        Map.has_key?(dest_res.fields, rel.destination_attribute) or
+          Enum.any?(dest_res.relationships, fn {_name, r} ->
+            r.type == :belongs_to and r.source_attribute == rel.destination_attribute
+          end)
     end
   end
 
@@ -371,7 +448,7 @@ defmodule AshRemote.Gen do
     end
   end
 
-  defp calculation_block(name, field, pk, ctx) do
+  defp calculation_block(name, field, pk, locally_available_names, ctx) do
     name = Identifier.validate_name!(name, "calculation name")
 
     args =
@@ -396,7 +473,7 @@ defmodule AshRemote.Gen do
     # literal (see `AshRemote.Expressions.Remote`).
     implementation =
       cond do
-        field.expression && AshRemote.Expression.safe?(field.expression) ->
+        field.expression && mirrorable_here?(field.expression, locally_available_names) ->
           "expr(#{field.expression})"
 
         true ->
@@ -415,6 +492,25 @@ defmodule AshRemote.Gen do
         end
     """
     |> String.trim_trailing()
+  end
+
+  # `AshRemote.Expression.safe?/1` (called server-side via `encode/2` before
+  # this expression was ever published) only proves the shape is
+  # data-expressible and every name it references is *publicly known* on the
+  # backend resource — it says nothing about whether *this* generation run
+  # is actually emitting each of those names locally. A manifest expression
+  # can legitimately reference a public aggregate that this particular client
+  # doesn't mirror (e.g. its relationship wasn't reproducible, or the
+  # generator simply hasn't been re-run since that aggregate was added) —
+  # generating `expr(...)` against a name with no local attribute/aggregate
+  # would be uncompilable, so re-resolve every referenced name against what
+  # this run is emitting and fall back to the always-correct `remote(...)`
+  # proxy for the whole calculation if any single one doesn't check out.
+  defp mirrorable_here?(expression, locally_available_names) do
+    case AshRemote.Expression.referenced_names(expression) do
+      {:ok, names} -> Enum.all?(names, &MapSet.member?(locally_available_names, &1))
+      :error -> false
+    end
   end
 
   # A manifest aggregate field is reproducible on the client when the server
@@ -492,57 +588,100 @@ defmodule AshRemote.Gen do
     |> String.trim_trailing()
   end
 
-  defp gen_actions(res) do
-    blocks = Enum.map(res.actions, &action_block(&1, res))
+  defp gen_actions(res, ctx) do
+    blocks = Enum.map(res.actions, &action_block(&1, res, ctx))
     "  actions do\n#{Enum.join(blocks, "\n\n")}\n  end"
   end
 
   # Action names are validated once, here, regardless of which action-type
   # clause below ends up interpolating `action.name` raw.
-  defp action_block(action, res) do
+  defp action_block(action, res, ctx) do
     Identifier.validate_name!(action.name, "action name")
-    do_action_block(action, res)
+    do_action_block(action, res, ctx)
   end
 
-  defp do_action_block(%{type: :read} = action, _res) do
+  defp do_action_block(%{type: :read} = action, _res, ctx) do
+    # Reads have no `accept` concept — every input is a genuine `argument`,
+    # never a resource attribute (even one that happens to share its name,
+    # e.g. `by_session`'s `argument :session_id` alongside the FK attribute
+    # `belongs_to :session` implies). Found generating from a real
+    # arcc-center manifest: this rendered zero arguments before, so any read
+    # action taking one (the common case — an unfiltered read is rare)
+    # crashed at call time with `Ash.Error.Invalid.NoSuchInput`.
     opts =
-      [
-        primary?(action),
-        if(action.get?, do: "    get? true"),
-        # Records requested remote calculations in query context so the data
-        # layer can prefetch them in the same request.
-        "    prepare AshRemote.PrefetchCalculations"
-      ]
+      ([primary?(action), if(action.get?, do: "    get? true")] ++
+         argument_lines(action.inputs, ctx) ++
+         [
+           # Carries this call's argument VALUES to the data layer (the
+           # argument lines above only declare their names/types).
+           "    prepare AshRemote.CaptureArguments",
+           # Records requested remote calculations in query context so the
+           # data layer can prefetch them in the same request.
+           "    prepare AshRemote.PrefetchCalculations"
+         ])
       |> compact_lines()
 
     "    read :#{action.name} do\n#{opts}\n    end"
   end
 
-  defp do_action_block(%{type: :create} = action, res) do
+  defp do_action_block(%{type: :create} = action, res, ctx) do
     accept = accept_line(action, res)
+    arguments = argument_lines(non_attribute_inputs(action, res), ctx)
 
-    "    create :#{action.name} do\n#{compact_lines([primary?(action), accept])}\n    end"
+    lines = compact_lines([primary?(action), accept | arguments])
+    "    create :#{action.name} do\n#{lines}\n    end"
   end
 
-  defp do_action_block(%{type: :update} = action, res) do
+  defp do_action_block(%{type: :update} = action, res, ctx) do
+    accept = accept_line(action, res)
+    arguments = argument_lines(non_attribute_inputs(action, res), ctx)
+
     lines =
-      compact_lines([
-        primary?(action),
-        # Remote data layer can't do server-side atomic updates.
-        "    require_atomic? false",
-        accept_line(action, res)
-      ])
+      compact_lines(
+        [
+          primary?(action),
+          # Remote data layer can't do server-side atomic updates.
+          "    require_atomic? false",
+          accept
+        ] ++ arguments
+      )
 
     "    update :#{action.name} do\n#{lines}\n    end"
   end
 
-  defp do_action_block(%{type: :destroy} = action, _res) do
+  defp do_action_block(%{type: :destroy} = action, _res, _ctx) do
     lines = compact_lines([primary?(action), "    require_atomic? false"])
     "    destroy :#{action.name} do\n#{lines}\n    end"
   end
 
-  defp do_action_block(%{type: :action, name: name}, _res) do
+  defp do_action_block(%{type: :action, name: name}, _res, _ctx) do
     "    # generic action #{inspect(name)} not yet supported by ash_remote codegen"
+  end
+
+  # Inputs `accept_line/2` didn't claim as resource attributes — real
+  # action-local arguments a create/update declares beyond its accepted
+  # attributes (distinct from a read's inputs, which are unconditionally all
+  # arguments — see `do_action_block/3`'s `:read` clause).
+  defp non_attribute_inputs(action, res) do
+    attr_names = res |> attribute_fields() |> Enum.map(fn {name, _} -> name end) |> MapSet.new()
+    Enum.reject(action.inputs, &MapSet.member?(attr_names, &1.name))
+  end
+
+  defp argument_lines(inputs, ctx) do
+    Enum.map(inputs, fn arg ->
+      name = Identifier.validate_name!(arg.name, "argument name")
+      opts = argument_opts(arg)
+      "    argument :#{name}, #{render_type(arg.type, ctx)}#{opts}"
+    end)
+  end
+
+  # `Ash.Resource.Dsl.Actions.Read.Argument` (and its create/update/action
+  # siblings) has no `required?:` option — an argument's presence is entirely
+  # controlled by `allow_nil?:`. `Manifest.Argument.required?` exists for
+  # other consumers of the manifest; it doesn't map to an `argument` DSL
+  # option here.
+  defp argument_opts(arg) do
+    if arg.allow_nil? == false, do: ", allow_nil?: false", else: ""
   end
 
   defp accept_line(action, res) do
@@ -587,7 +726,12 @@ defmodule AshRemote.Gen do
       end
       """
 
-    %{module: ctx.domain, kind: :domain, source: source, resources: resources}
+    AshCloner.Definition.new(
+      module: ctx.domain,
+      kind: :domain,
+      source: source,
+      resources: resources
+    )
   end
 
   # --- field helpers -------------------------------------------------------
@@ -664,33 +808,6 @@ defmodule AshRemote.Gen do
   # derivation in `Mix.Tasks.AshRemote.Gen.output_path/2`.
   defp client_module(backend_module, ctx) do
     Identifier.validate_module!(backend_module, "module name")
-
-    rest =
-      backend_module
-      |> String.split(".")
-      |> Enum.drop(length(ctx.prefix))
-
-    Enum.join([ctx.namespace | rest], ".")
-  end
-
-  defp common_prefix([]), do: []
-
-  defp common_prefix(modules) do
-    segments = Enum.map(modules, &String.split(&1, "."))
-
-    segments
-    |> Enum.reduce(&common_leading/2)
-    |> then(fn common ->
-      # Never consume the final segment of the shortest module (keep a leaf).
-      min_len = segments |> Enum.map(&length/1) |> Enum.min()
-      Enum.take(common, min(length(common), min_len - 1))
-    end)
-  end
-
-  defp common_leading(a, b) do
-    a
-    |> Enum.zip(b)
-    |> Enum.take_while(fn {x, y} -> x == y end)
-    |> Enum.map(&elem(&1, 0))
+    AshCloner.Namespace.reprefix(backend_module, ctx.prefix, ctx.namespace)
   end
 end

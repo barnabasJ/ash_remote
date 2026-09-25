@@ -3,12 +3,13 @@ defmodule AshRemote.Client.Domain do
   use Ash.Domain, validate_config_inclusion?: false
 
   resources do
-    resource(AshRemote.Client.User)
-    resource(AshRemote.Client.Todo)
-    resource(AshRemote.Client.Comment)
-    resource(AshRemote.Client.Note)
-    resource(AshRemote.Client.RaceItem)
-    resource(AshRemote.Client.Singleton)
-    resource(AshRemote.Client.CompositeItem)
+    resource AshRemote.Client.User
+    resource AshRemote.Client.Todo
+    resource AshRemote.Client.Comment
+    resource AshRemote.Client.Note
+    resource AshRemote.Client.RaceItem
+    resource AshRemote.Client.Singleton
+    resource AshRemote.Client.CompositeItem
+    resource AshRemote.Client.UpsertOnly
   end
 end

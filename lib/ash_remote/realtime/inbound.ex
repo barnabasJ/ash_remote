@@ -79,8 +79,23 @@ defmodule AshRemote.Realtime.Inbound do
   end
 
   # Map the wire (backend) action to a local action: inverted action_map, else
-  # same name, else the resource's primary action of the same type, else skip.
-  # Never creates atoms (String.to_existing_atom, rescued).
+  # same name, else the resource's primary action of the same type, else a
+  # synthetic type-only action, else skip. Never creates atoms
+  # (String.to_existing_atom, rescued).
+  #
+  # A resolved *real* action is only needed to make the notification look like
+  # a genuine local mutation to a notifier that inspects it (e.g. `Ash.Notifier
+  # .PubSub` matching `notification.action.name` against `publish` rules). A
+  # `AshMultiDatalayer.Notifiers.ExternalChange`-style notifier — the only one
+  # a `LocalOutbox`/`ProvenCoverage`-backed client resource actually needs —
+  # only ever reads `notification.data`/`notification.changeset.to_tenant`
+  # (see both orchestrators' `handle_external_change/2`), never the action
+  # itself beyond `Ash.Notifier.notify/1`'s own `.name`/`.type` bookkeeping.
+  # So a client resource that mirrors a remote action with no matching local
+  # action at all (the common case for an admin-only mutation like `approve`,
+  # replicated to a worker's read-only local cache) must still fire its
+  # notifiers rather than silently drop the change — that's the entire point
+  # of realtime convergence for an offline-first cache/outbox.
   defp resolve_action(resource, %{"name" => name, "type" => type}, invert) do
     local_name = Map.get(invert, name) || existing_atom(name)
 
@@ -89,7 +104,7 @@ defmodule AshRemote.Realtime.Inbound do
            true <- to_string(action.type) == type do
         action
       else
-        _ -> primary_action(resource, type)
+        _ -> primary_action(resource, type) || synthetic_action(type)
       end
 
     if action, do: {:ok, action}, else: {:skip, "no local action for #{inspect(name)}/#{type}"}
@@ -101,6 +116,20 @@ defmodule AshRemote.Realtime.Inbound do
     case existing_atom(type) do
       nil -> nil
       type_atom -> Ash.Resource.Info.primary_action(resource, type_atom)
+    end
+  end
+
+  @synthetic_action_structs %{
+    "create" => Ash.Resource.Actions.Create,
+    "read" => Ash.Resource.Actions.Read,
+    "update" => Ash.Resource.Actions.Update,
+    "destroy" => Ash.Resource.Actions.Destroy
+  }
+
+  defp synthetic_action(type) do
+    case @synthetic_action_structs[type] do
+      nil -> nil
+      module -> struct(module, name: :ash_remote_external_change)
     end
   end
 
