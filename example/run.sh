@@ -39,9 +39,11 @@ for app in todo_server todo_client; do
   ( cd "$app" && mix compile )
 done
 
-# Fresh local state each run: two isolated SQLite files (+ wal/shm sidecars).
-echo "▶ clearing stale client DBs"
-rm -f todo_client/priv/client_a.db* todo_client/priv/client_b.db*
+# Fresh local state by default; preserve it when restarting after code changes.
+if [ "${PRESERVE_CLIENT_DBS:-0}" != "1" ]; then
+  echo "▶ clearing stale client DBs"
+  rm -f todo_client/priv/client_a.db* todo_client/priv/client_b.db*
+fi
 mkdir -p todo_client/priv
 
 echo "▶ starting todo_server on :${SERVER_PORT}  (log: /tmp/todo_server.log)"

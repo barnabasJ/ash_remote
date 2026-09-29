@@ -23,6 +23,7 @@ if config_env() == :test do
 end
 
 config :ash, :validate_domain_config_inclusion?, false
+config :ash, :default_string_length_count, :codepoints
 
 # The `remote/1,2` custom expression (see AshRemote.Expressions.Remote). Ash reads
 # `:custom_expressions` at compile time; downstream apps generating clients must

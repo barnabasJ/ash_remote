@@ -35,7 +35,7 @@ defmodule AshRemote.Transport.Req do
         headers: headers(config),
         receive_timeout: config.receive_timeout,
         retry: config.retry,
-        decode_json: [keys: :strings]
+        decoders: [json: &Jason.decode(&1, keys: :strings)]
       ]
       |> Req.new()
       |> attach_debug()

@@ -23,7 +23,8 @@ defmodule TodoClient.RealtimeBridge do
     Phoenix.PubSub.broadcast(
       TodoClient.PubSub,
       @topic,
-      {:remote_change, notification.resource, notification.action.type}
+      {:remote_change, notification.resource, notification.action.type,
+       notification.data && Map.get(notification.data, :id)}
     )
 
     :ok

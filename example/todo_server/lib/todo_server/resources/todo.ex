@@ -23,7 +23,6 @@ defmodule TodoServer.Todo do
       :priority,
       :due_date,
       :list_id,
-      :parent_id,
       # Stored verbatim from the client — the server must NOT author this, or the
       # client's stale-check base image could never match (see the attribute).
       :version
@@ -38,8 +37,21 @@ defmodule TodoServer.Todo do
       change relate_actor(:user)
     end
 
-    update :update, primary?: true
-    destroy :destroy, primary?: true
+    update :update do
+      primary? true
+      require_atomic? false
+      argument :expected_version, :integer
+    end
+
+    destroy :destroy do
+      primary? true
+      require_atomic? false
+      argument :expected_version, :integer
+    end
+  end
+
+  changes do
+    change TodoServer.RequireExpectedVersion, on: [:update, :destroy]
   end
 
   policies do
@@ -105,16 +117,6 @@ defmodule TodoServer.Todo do
     belongs_to :list, TodoServer.TodoList do
       public? true
       attribute_writable? true
-    end
-
-    belongs_to :parent, TodoServer.Todo do
-      public? true
-      attribute_writable? true
-    end
-
-    has_many :subtasks, TodoServer.Todo do
-      public? true
-      destination_attribute :parent_id
     end
   end
 

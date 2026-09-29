@@ -34,6 +34,7 @@ defmodule TodoClient.Application do
           {AshRemote.Realtime,
            otp_app: :todo_client,
            connect_params: {TodoClient.Session, :connect_params, []},
+           notification_enabled?: {TodoClient.Network, :online?, []},
            echo: :deliver},
           # Closes the notification-gap AshRemote.Realtime documents. Started
           # AFTER AshRemote.Realtime: the Lifecycle registry it registers with

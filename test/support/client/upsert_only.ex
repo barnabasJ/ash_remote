@@ -21,7 +21,6 @@ defmodule AshRemote.Client.UpsertOnly do
 
     read :by_token do
       argument :token, :string, allow_nil?: false
-      prepare AshRemote.CaptureArguments
       filter expr(token == ^arg(:token))
     end
 

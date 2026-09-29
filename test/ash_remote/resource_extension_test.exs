@@ -17,4 +17,13 @@ defmodule AshRemote.ResourceExtensionTest do
   test "the validation verifier is registered on the extension" do
     assert AshRemote.Resource.Verifiers.ValidateRemote in AshRemote.DataLayer.verifiers()
   end
+
+  test "the data layer installs argument capture without an action declaration" do
+    action = Ash.Resource.Info.action(AshRemote.Client.UpsertOnly, :by_token)
+
+    assert Enum.any?(action.preparations, fn
+             %Ash.Resource.Preparation{preparation: {AshRemote.CaptureArguments, _}} -> true
+             _ -> false
+           end)
+  end
 end

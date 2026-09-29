@@ -39,6 +39,9 @@ defmodule TodoClient.Case do
   end
 
   setup do
+    TodoClient.Network.set_offline!(false)
+    on_exit(fn -> TodoClient.Network.set_offline!(false) end)
+
     ada =
       TodoServer.Accounts.User
       |> Ash.Query.filter(email == "ada@example.com")

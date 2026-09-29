@@ -15,17 +15,10 @@ defmodule TodoClient.Live do
       tells this LiveView to refetch, so the refetch is a genuine (and, for
       the affected rows, singular) miss — never a stale cache hit.
     * **Cache stats** — the sticky bar at the top, fed by `ash_multi_datalayer`
-      telemetry, shows hits/misses/backfills/invalidations live. Warm a
-      Browse filter, then change something on the *other* client instance:
-      watch only the affected filter's coverage take a miss, everything else
-      stays a hit.
-    * **Two aggregate strategies** — `todo_count` is folded from the cached
-      todos (0 RPC when covered); `completed_count` is opted out of folding
-      and always forwarded to the server by name (1 RPC) — side by side.
+      telemetry, shows hits/misses/backfills/invalidations live. Each refresh
+      loads lists with their todos in one Ash query; Browse reuses those rows.
   """
   use Phoenix.LiveView
-
-  require Ash.Query
 
   alias TodoClient.Remote.Todo
   alias TodoClient.Remote.TodoList
@@ -35,23 +28,26 @@ defmodule TodoClient.Live do
     if connected?(socket) do
       Phoenix.PubSub.subscribe(TodoClient.PubSub, TodoClient.CacheStats.topic())
       Phoenix.PubSub.subscribe(TodoClient.PubSub, TodoClient.RealtimeBridge.topic())
+      Phoenix.PubSub.subscribe(TodoClient.PubSub, TodoClient.Network.topic())
     end
-
-    lists = load_lists()
 
     {:ok,
      socket
      |> assign(
        user: TodoClient.Session.user(),
-       lists: lists,
        form: new_form(),
-       browse_list_id: lists |> List.first() |> then(&(&1 && &1.id)),
+       browse_list_id: nil,
        browse_status: "all",
        browse_priority: "any",
+       lists: [],
+       todos: [],
+       browse_todos: [],
+       remote_updated_ids: MapSet.new(),
        cache_stats: TodoClient.CacheStats.stats(),
-       cache_enabled?: AshMultiDatalayer.enabled?(Todo)
+       cache_enabled?: AshMultiDatalayer.enabled?(Todo),
+       offline?: TodoClient.Network.offline?()
      )
-     |> assign_browse_todos()}
+     |> refresh()}
   end
 
   @impl true
@@ -68,13 +64,25 @@ defmodule TodoClient.Live do
           </span>
         </span>
         <button
-          phx-click="cache-toggle"
+          phx-click="network-toggle"
           style={"margin-left:auto; padding:.3rem .7rem; border-radius:.4rem; border:1px solid #ccc; cursor:pointer; " <>
+            if(@offline?, do: "background:#fbeaea;", else: "background:#e6f7e6;")}
+        >
+          {if @offline?, do: "Go online", else: "Go offline"}
+        </button>
+        <button
+          phx-click="cache-toggle"
+          style={"padding:.3rem .7rem; border-radius:.4rem; border:1px solid #ccc; cursor:pointer; " <>
             if(@cache_enabled?, do: "background:#e6f7e6;", else: "background:#fbeaea;")}
         >
           cache {if @cache_enabled?, do: "ON", else: "OFF"}
         </button>
       </footer>
+
+      <p :if={@offline?} style="margin:-1rem .5rem 1rem; padding:.55rem .75rem; border-radius:.4rem; background:#fff2e7; color:#81502a; font-size:.85rem;">
+        Offline for this client. Covered reads still use ETS; uncached reads and writes fail.
+        Incoming notifications are dropped until you go online.
+      </p>
 
       <header style="display:flex; align-items:baseline; gap:.75rem; margin-bottom:1.5rem; padding: 0 .5rem;">
         <h1 style="margin:0;">Todos</h1>
@@ -82,6 +90,11 @@ defmodule TodoClient.Live do
           signed in as <strong>{@user && @user["email"]}</strong> · ash_remote + ash_multi_datalayer
         </small>
       </header>
+
+      <p style="margin:-.8rem .5rem 1.2rem; color:#526173; font-size:.83rem; line-height:1.45;">
+        Badges show the serving layer. A "remote update" badge marks a change received from
+        another client until your next action, even if another view refilled ETS first.
+      </p>
 
       <p
         :if={info = Phoenix.Flash.get(@flash, :info)}
@@ -110,23 +123,13 @@ defmodule TodoClient.Live do
             {list.name}
             <.badge :if={list.public} />
             <small style="margin-left:auto;color:#888;font-weight:400;">
-              <span title="native aggregate folded from the cached todos — 0 RPC on a warm reload">
-                {list.todo_count} todos <span style="color:#2e7d32">·local</span>
-              </span>
-              <span title="aggregate opted out of folding — forwarded to the server by name">
-                {list.completed_count} done <span style="color:#c62828">·server</span>
-              </span>
+              <span>{list.todo_count} todos · {list.completed_count} done</span>
             </small>
           </h2>
 
           <ul style="list-style: none; padding: 0;">
             <li :for={todo <- Enum.sort_by(list.todos, & &1.title)}>
-              <.todo_row todo={todo} />
-              <ul style="list-style: none; padding-left: 1.75rem;">
-                <li :for={subtask <- Enum.sort_by(todo.subtasks, & &1.title)}>
-                  <.todo_row todo={subtask} />
-                </li>
-              </ul>
+              <.todo_row todo={todo} remote_updated_ids={@remote_updated_ids} />
             </li>
           </ul>
         </section>
@@ -151,13 +154,11 @@ defmodule TodoClient.Live do
           title {error_text(error)}
         </p>
 
-        <%!-- Browse panel: plain-attribute filtered reads — the cache-eligible
-             workload. Flip between tabs and watch the RPC log go quiet while
-             the hit counter climbs. --%>
+        <%!-- Browse filters the todos loaded by read_page/0. --%>
         <section style="margin-top:2.5rem; border-top:2px solid #ddd; padding-top:1rem;">
           <h2 style="display:flex; align-items:baseline; gap:.5rem;">
             Browse
-            <small style="color:#888;font-weight:400">cached filtered reads via ash_multi_datalayer</small>
+            <small style="color:#888;font-weight:400">loaded with the lists above</small>
           </h2>
 
           <div style="display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:.75rem;">
@@ -206,6 +207,7 @@ defmodule TodoClient.Live do
               </span>
               <span style="font-size:.75rem;color:#888;">{todo.priority}</span>
               <span :if={todo.due_date} style="font-size:.75rem;color:#888;">{todo.due_date}</span>
+              <span :if={source = source_label(todo, @remote_updated_ids)} title="A remote update marker remains until your next action; the actual read layer is recorded on the row" style="font-size:.7rem;color:#526173;background:#edf1f5;padding:.15rem .4rem;border-radius:.35rem;">{source}</span>
             </li>
           </ul>
           <p :if={@browse_todos == []} style="color:#888;">nothing here</p>
@@ -239,7 +241,17 @@ defmodule TodoClient.Live do
   defp todo_row(assigns) do
     ~H"""
     <div style="display:flex; align-items:center; gap:.5rem; padding:.4rem 0; border-bottom:1px solid #eee;">
-      <input type="checkbox" checked={@todo.completed} phx-click="toggle" phx-value-id={@todo.id} />
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={to_string(@todo.completed)}
+        aria-label={"Toggle #{@todo.title}"}
+        phx-click="toggle"
+        phx-value-id={@todo.id}
+        style="border:0;background:none;padding:0;cursor:pointer;font-size:1.1rem;line-height:1;"
+      >
+        {if @todo.completed, do: "☑", else: "☐"}
+      </button>
       <span style={"flex:1;" <> if(@todo.completed, do: "text-decoration:line-through;color:#999;", else: "")}>
         {@todo.title}
       </span>
@@ -250,9 +262,26 @@ defmodule TodoClient.Live do
         overdue
       </span>
       <span style="font-size:.75rem;color:#888;">{@todo.priority}</span>
+      <span :if={source = source_label(@todo, @remote_updated_ids)} title="A remote update marker remains until your next action; the actual read layer is recorded on the row" style="font-size:.7rem;color:#526173;background:#edf1f5;padding:.15rem .4rem;border-radius:.35rem;">{source}</span>
       <button phx-click="delete" phx-value-id={@todo.id} style="border:0;background:none;cursor:pointer;color:#c00;">✕</button>
     </div>
     """
+  end
+
+  defp source_label(todo, remote_updated_ids) do
+    if MapSet.member?(remote_updated_ids, todo.id) do
+      "remote update"
+    else
+      served_from_label(todo)
+    end
+  end
+
+  defp served_from_label(todo) do
+    case Ash.Resource.get_metadata(todo, :served_from_layer) do
+      Ash.DataLayer.Ets -> "served by ETS"
+      AshRemote.DataLayer -> "served by server"
+      _ -> nil
+    end
   end
 
   @impl true
@@ -262,65 +291,114 @@ defmodule TodoClient.Live do
   end
 
   def handle_event("save", %{"todo" => params}, socket) do
-    params = Map.put(params, "public", list_public?(socket, params["list_id"]))
+    if socket.assigns.offline? do
+      {:noreply, offline_write_flash(socket)}
+    else
+      params = Map.put(params, "public", list_public?(socket, params["list_id"]))
 
-    case AshPhoenix.Form.submit(socket.assigns.form.source, params: params) do
-      {:ok, _todo} ->
-        {:noreply,
-         socket |> assign(lists: load_lists(), form: new_form()) |> assign_browse_todos()}
+      case AshPhoenix.Form.submit(socket.assigns.form.source, params: params) do
+        {:ok, _todo} ->
+          {:noreply, socket |> assign(form: new_form()) |> refresh()}
 
-      {:error, form} ->
-        {:noreply, assign(socket, form: to_form(form))}
+        {:error, form} ->
+          {:noreply, assign(socket, form: to_form(form))}
+      end
     end
   end
 
   def handle_event("add_list", params, socket) do
-    TodoList
-    |> Ash.Changeset.for_create(
-      :create,
-      %{name: params["name"], public: params["public"] == "true"},
-      actor: actor()
-    )
-    |> Ash.create()
+    if socket.assigns.offline? do
+      {:noreply, offline_write_flash(socket)}
+    else
+      result =
+        TodoList
+        |> Ash.Changeset.for_create(
+          :create,
+          %{name: params["name"], public: params["public"] == "true"},
+          actor: actor()
+        )
+        |> Ash.create()
 
-    {:noreply, socket |> assign(lists: load_lists()) |> assign_browse_todos()}
+      {:noreply,
+       case result do
+         {:ok, _list} -> refresh(socket)
+         {:error, _error} -> write_error_flash(socket)
+       end}
+    end
   end
 
   def handle_event("toggle", %{"id" => id}, socket) do
-    result =
-      case Ash.get(Todo, id, actor: actor()) do
-        {:ok, todo} ->
-          todo
-          |> Ash.Changeset.for_update(:update, %{completed: not todo.completed}, actor: actor())
-          |> Ash.update(actor: actor())
+    if socket.assigns.offline? do
+      {:noreply, offline_write_flash(socket)}
+    else
+      displayed = Enum.find(socket.assigns.todos, &(&1.id == id))
 
-        error ->
-          error
-      end
+      result =
+        case Ash.get(Todo, id, actor: actor()) do
+          {:ok, todo} ->
+            todo
+            |> Ash.Changeset.for_update(
+              :update,
+              %{
+                completed: not (displayed || todo).completed,
+                expected_version: (displayed || todo).version
+              },
+              actor: actor()
+            )
+            |> Ash.update(actor: actor())
 
-    {:noreply, reconcile_if_stale(socket, id, result)}
+          error ->
+            error
+        end
+
+      {:noreply, reconcile_if_stale(socket, id, result)}
+    end
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
-    result =
-      case Ash.get(Todo, id, actor: actor()) do
-        {:ok, todo} -> Ash.destroy(todo, actor: actor())
-        error -> error
-      end
+    if socket.assigns.offline? do
+      {:noreply, offline_write_flash(socket)}
+    else
+      displayed = Enum.find(socket.assigns.todos, &(&1.id == id))
 
-    {:noreply, reconcile_if_stale(socket, id, result)}
+      result =
+        case Ash.get(Todo, id, actor: actor()) do
+          {:ok, todo} ->
+            todo
+            |> Ash.Changeset.for_destroy(
+              :destroy,
+              %{expected_version: (displayed || todo).version},
+              actor: actor()
+            )
+            |> Ash.destroy(actor: actor())
+
+          error ->
+            error
+        end
+
+      {:noreply, reconcile_if_stale(socket, id, result)}
+    end
   end
 
   def handle_event("browse-list", %{"browse_list" => id}, socket) do
-    {:noreply, socket |> assign(browse_list_id: id) |> assign_browse_todos()}
+    {:noreply,
+     socket
+     |> assign(browse_list_id: id, remote_updated_ids: MapSet.new())
+     |> assign_browse_todos()}
   end
 
   def handle_event("browse-status", %{"status" => status}, socket) do
-    {:noreply, socket |> assign(browse_status: status) |> assign_browse_todos()}
+    {:noreply,
+     socket
+     |> assign(browse_status: status, remote_updated_ids: MapSet.new())
+     |> assign_browse_todos()}
   end
 
   def handle_event("browse-priority", %{"priority" => priority}, socket) do
-    {:noreply, socket |> assign(browse_priority: priority) |> assign_browse_todos()}
+    {:noreply,
+     socket
+     |> assign(browse_priority: priority, remote_updated_ids: MapSet.new())
+     |> assign_browse_todos()}
   end
 
   def handle_event("cache-toggle", _params, socket) do
@@ -333,7 +411,26 @@ defmodule TodoClient.Live do
     {:noreply,
      socket
      |> assign(cache_enabled?: AshMultiDatalayer.enabled?(Todo))
-     |> assign_browse_todos()}
+     |> refresh()}
+  end
+
+  def handle_event("network-toggle", _params, socket) do
+    offline? = not TodoClient.Network.offline?()
+    TodoClient.Network.set_offline!(offline?)
+
+    socket =
+      if offline? do
+        refresh(socket)
+      else
+        socket
+        |> clear_flash(:error)
+        |> put_flash(
+          :info,
+          "Online. Cache invalidated; refresh the browser to read the latest data."
+        )
+      end
+
+    {:noreply, assign(socket, offline?: offline?)}
   end
 
   @impl true
@@ -341,13 +438,38 @@ defmodule TodoClient.Live do
     {:noreply, assign(socket, cache_stats: stats)}
   end
 
-  def handle_info({:remote_change, _resource, _type}, socket) do
+  def handle_info({:network, offline?}, socket) do
+    socket = assign(socket, offline?: offline?)
+
+    {:noreply,
+     if offline? do
+       socket
+     else
+       socket
+       |> clear_flash(:error)
+       |> put_flash(
+         :info,
+         "Online. Cache invalidated; refresh the browser to read the latest data."
+       )
+     end}
+  end
+
+  def handle_info({:remote_change, resource, _type, id}, socket) do
     # A change we're allowed to see arrived over the realtime socket. By now
     # AshRemote.MultiDatalayer.ChangeNotifier has already dropped the affected
     # coverage entries (it ran first — see TodoClient.Remote.Todo's
     # `notifiers:`), so this refetch is a genuine miss for the affected rows,
     # not a stale hit.
-    {:noreply, socket |> assign(lists: load_lists()) |> assign_browse_todos()}
+    socket = refresh(socket, clear_remote?: false)
+
+    socket =
+      if resource == Todo and id do
+        assign(socket, remote_updated_ids: MapSet.put(socket.assigns.remote_updated_ids, id))
+      else
+        socket
+      end
+
+    {:noreply, socket}
   end
 
   # A cached row can go stale with no signal at all: `ash_remote` documents
@@ -364,17 +486,67 @@ defmodule TodoClient.Live do
 
   defp reconcile_if_stale(socket, id, {:error, error}) do
     socket =
-      if AshMultiDatalayer.not_found?(error) do
-        AshMultiDatalayer.forget!(Todo, %{id: id})
-        put_flash(socket, :info, "That todo was already removed elsewhere — refreshed.")
-      else
-        put_flash(socket, :error, "That action couldn't be completed.")
+      cond do
+        AshMultiDatalayer.not_found?(error) ->
+          AshMultiDatalayer.forget!(Todo, %{id: id})
+          put_flash(socket, :info, "That todo was already removed elsewhere — refreshed.")
+
+        stale_record?(error) ->
+          AshMultiDatalayer.forget!(Todo, %{id: id})
+
+          socket
+          |> clear_flash(:info)
+          |> put_flash(:error, "Conflict: this todo changed elsewhere. Showing the latest version.")
+
+        true ->
+          write_error_flash(socket)
       end
 
     refresh(socket)
   end
 
-  defp refresh(socket), do: socket |> assign(lists: load_lists()) |> assign_browse_todos()
+  defp stale_record?(error) do
+    error
+    |> Ash.Error.to_error_class()
+    |> Map.get(:errors, [])
+    |> Enum.any?(&match?(%Ash.Error.Changes.StaleRecord{}, &1))
+  end
+
+  defp refresh(socket, opts \\ []) do
+    case read_page() do
+      {:ok, {lists, todos}} ->
+        assign_page(socket, lists, todos, opts)
+
+      {:error, _error} ->
+        put_flash(
+          socket,
+          :error,
+          "Read failed: the server is unavailable and this query is not fully cached."
+        )
+    end
+  end
+
+  defp assign_page(socket, lists, todos, opts) do
+    selected_id =
+      if Enum.any?(lists, &(&1.id == socket.assigns.browse_list_id)) do
+        socket.assigns.browse_list_id
+      else
+        lists |> List.first() |> then(&(&1 && &1.id))
+      end
+
+    socket
+    |> assign(
+      lists: lists,
+      todos: todos,
+      browse_list_id: selected_id,
+      remote_updated_ids:
+        if(Keyword.get(opts, :clear_remote?, true),
+          do: MapSet.new(),
+          else: socket.assigns.remote_updated_ids
+        )
+    )
+    |> assign_browse_todos()
+  end
 
   defp actor, do: TodoClient.Session.actor()
 
@@ -385,9 +557,8 @@ defmodule TodoClient.Live do
     end
   end
 
-  # The cache-eligible workload: plain attribute filters, no calculations or
-  # aggregates. A broad list read warms the cache; the narrower status and
-  # priority filters are then proven subsets, served from ETS with no RPC.
+  # Browse is a view over the rows read once by read_page/0. Changing a tab or
+  # filter only changes the assigned subset; it never makes another data read.
   defp assign_browse_todos(%{assigns: %{browse_list_id: nil}} = socket) do
     assign(socket, browse_todos: [])
   end
@@ -396,37 +567,53 @@ defmodule TodoClient.Live do
     %{browse_list_id: list_id, browse_status: status, browse_priority: priority} =
       socket.assigns
 
-    query = Ash.Query.filter(Todo, list_id == ^list_id)
+    todos =
+      Enum.filter(socket.assigns.todos, fn todo ->
+        todo.list_id == list_id and
+          (status == "all" or todo.completed == (status == "done")) and
+          (priority == "any" or to_string(todo.priority) == priority)
+      end)
 
-    query =
-      case status do
-        "active" -> Ash.Query.filter(query, completed == false)
-        "done" -> Ash.Query.filter(query, completed == true)
-        _all -> query
-      end
-
-    query =
-      case priority do
-        "any" -> query
-        value -> Ash.Query.filter(query, priority == ^String.to_existing_atom(value))
-      end
-
-    assign(
-      socket,
-      browse_todos: query |> Ash.Query.sort(:title) |> Ash.read!(actor: actor())
-    )
+    assign(socket, browse_todos: todos)
   end
 
-  defp load_lists do
-    TodoList
-    |> Ash.Query.sort(:name)
-    |> Ash.Query.load([
-      :todo_count,
-      :completed_count,
-      todos: [:overdue?, subtasks: [:overdue?]]
-    ])
-    |> Ash.read!(actor: actor())
+  defp read_page do
+    result =
+      TodoList
+      |> Ash.Query.sort(:name)
+      |> Ash.Query.load(todos: [:overdue?])
+      |> Ash.read(actor: actor())
+
+    case result do
+      {:ok, lists} ->
+        lists =
+          Enum.map(lists, fn list ->
+            list_todos = list.todos
+
+            # Loading the Ash aggregates here re-reads Todo several times. These
+            # counts use the complete relationship result already assigned below.
+            list
+            |> Map.put(:todo_count, length(list_todos))
+            |> Map.put(:completed_count, Enum.count(list_todos, & &1.completed))
+          end)
+
+        {:ok, {lists, Enum.flat_map(lists, & &1.todos)}}
+
+      {:error, error} ->
+        {:error, error}
+    end
   end
+
+  defp write_error_flash(socket) do
+    if socket.assigns.offline? do
+      offline_write_flash(socket)
+    else
+      put_flash(socket, :error, "That action couldn't be completed.")
+    end
+  end
+
+  defp offline_write_flash(socket),
+    do: put_flash(socket, :error, "Write failed: this client is offline. Go online to write.")
 
   defp new_form do
     Todo |> AshPhoenix.Form.for_create(:create, as: "todo", actor: actor()) |> to_form()

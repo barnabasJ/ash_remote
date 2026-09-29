@@ -1,6 +1,7 @@
 defmodule AshRemote.CaptureArguments do
   @moduledoc """
-  Read preparation (added to generated read actions) that captures the
+  Read preparation (attached to each read action by `AshRemote.DataLayer`'s
+  DSL transformer) that captures the
   query's caller-supplied action-argument *values* into context, where
   `AshRemote.DataLayer` can find them for the wire request's `input`.
 
@@ -20,10 +21,6 @@ defmodule AshRemote.CaptureArguments do
 
   @impl true
   def prepare(query, _opts, _context) do
-    if query.arguments == %{} do
-      query
-    else
-      Ash.Query.set_context(query, %{ash_remote_arguments: query.arguments})
-    end
+    Ash.Query.set_context(query, %{ash_remote_arguments: query.arguments})
   end
 end

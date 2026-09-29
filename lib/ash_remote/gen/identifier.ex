@@ -32,8 +32,7 @@ defmodule AshRemote.Gen.Identifier do
   file off from ever seeing attacker-controlled path segments, which is the
   more robust fix for the path-safety concern than trying to sanitize an
   already-computed path after the fact (see
-  `Mix.Tasks.AshRemote.Gen.output_path/2` for the belt-and-suspenders
-  containment check kept anyway).
+  `AshCloner.output_path/2` for the independent containment check).
 
   Trusted, developer-supplied input (CLI `--namespace`/`--domain`, or atoms
   that are already literals in our own source, like the `:id` primary-key

@@ -23,6 +23,11 @@ serializer output with the action names, relationship attributes, and
 validations the generator needs — the raw `mix ash.manifest.dump` output alone
 is not sufficient.
 
+`AshRemote.Gen` translates that manifest into `AshCloner.Definition`s.
+`AshCloner` then creates or updates the client modules, including output paths,
+missing entities, and drift handling. All cloning and merge behavior lives in
+the in-repo `packages/ash_cloner` package.
+
 - The client's `Ash.Query`/changeset is encoded into an RPC body
   (`AshRemote.Encode.{Fields,Filter,Sort,Pagination}`), sent via
   `AshRemote.Transport` (default `Req`), and the response decoded back into

@@ -37,18 +37,18 @@ defmodule TodoClient.MixProject do
       {:ash, "~> 3.29"},
       {:ash_phoenix, "~> 2.3"},
       {:ash_remote, path: "../.."},
-      {:ash_multi_datalayer, github: "barnabasJ/ash_multi_datalayer"},
+      {:ash_multi_datalayer, path: "../../../ash_multi_datalayer"},
       {:simple_sat, "~> 0.1"},
 
       # LocalOutbox offline stack: a local SQLite authority (ash_sqlite/
       # ecto_sqlite3) fronting the remote, with an Oban-drained outbox. Pinned to
       # match ash_multi_datalayer's own optional-dep locks.
-      {:oban, "2.23.0"},
-      {:ash_oban, "0.8.10"},
+      {:oban, "2.24.1"},
+      {:ash_oban, "0.8.14"},
       # The Oban dashboard — watch the outbox flush jobs drain at /oban.
       {:oban_web, "~> 2.11"},
-      {:ash_sqlite, "0.2.17"},
-      {:ecto_sqlite3, "0.24.1"},
+      {:ash_sqlite, "0.2.19"},
+      {:ecto_sqlite3, "0.25.0"},
       {:req, "~> 0.5"},
       {:jason, "~> 1.4"},
       # The realtime client transport (server→client push).

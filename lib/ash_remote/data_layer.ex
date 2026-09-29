@@ -27,6 +27,7 @@ defmodule AshRemote.DataLayer do
 
   use Spark.Dsl.Extension,
     sections: [AshRemote.Resource.Section.remote()],
+    transformers: [AshRemote.Resource.Transformers.CaptureReadArguments],
     verifiers: [AshRemote.Resource.Verifiers.ValidateRemote]
 
   alias AshRemote.{Decoder, Protocol, Query, Transport}
@@ -184,6 +185,7 @@ defmodule AshRemote.DataLayer do
       Protocol.build_run(%{
         resource: cfg.source,
         action: map_action(action.name, cfg),
+        input: Map.new(changeset.arguments, fn {key, value} -> {to_string(key), value} end),
         primary_key: primary_key(changeset),
         tenant: changeset.to_tenant
       })
@@ -567,10 +569,10 @@ defmodule AshRemote.DataLayer do
 
   defp query_action_name(_query, resource, cfg), do: read_action_name(resource, cfg)
 
-  # See `AshRemote.CaptureArguments` (a preparation the generator adds to
-  # every read action) — the query's caller-supplied argument values, stashed
-  # in context there since no `Ash.DataLayer` callback receives them
-  # directly. Same string-keying convention as `input/1` (writes).
+  # The data layer extension attaches CaptureArguments after each read action's
+  # own preparations. Ash copies its context into this data layer query.
+  defp query_arguments(%Query{context: %{action: %{arguments: []}}}), do: nil
+
   defp query_arguments(%Query{context: %{ash_remote_arguments: arguments}})
        when is_map(arguments) and map_size(arguments) > 0 do
     Map.new(arguments, fn {k, v} -> {to_string(k), v} end)

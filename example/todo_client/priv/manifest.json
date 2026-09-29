@@ -6,6 +6,19 @@
         "inputs": [
           {
             "allow_nil": false,
+            "has_default": true,
+            "name": "id",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "uuid",
+              "module": "Ash.Type.UUID",
+              "name": "UUID"
+            }
+          },
+          {
+            "allow_nil": false,
             "has_default": false,
             "name": "title",
             "required": true,
@@ -83,16 +96,16 @@
             }
           },
           {
-            "allow_nil": true,
-            "has_default": false,
-            "name": "parent_id",
+            "allow_nil": false,
+            "has_default": true,
+            "name": "version",
             "required": false,
             "sensitive": false,
             "type": {
               "allow_nil": null,
-              "kind": "uuid",
-              "module": "Ash.Type.UUID",
-              "name": "UUID"
+              "kind": "integer",
+              "module": "Ash.Type.Integer",
+              "name": "Integer"
             }
           }
         ],
@@ -129,6 +142,19 @@
       "action": {
         "get": false,
         "inputs": [
+          {
+            "allow_nil": false,
+            "has_default": true,
+            "name": "id",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "uuid",
+              "module": "Ash.Type.UUID",
+              "name": "UUID"
+            }
+          },
           {
             "allow_nil": false,
             "has_default": false,
@@ -208,16 +234,16 @@
             }
           },
           {
-            "allow_nil": true,
-            "has_default": false,
-            "name": "parent_id",
+            "allow_nil": false,
+            "has_default": true,
+            "name": "version",
             "required": false,
             "sensitive": false,
             "type": {
               "allow_nil": null,
-              "kind": "uuid",
-              "module": "Ash.Type.UUID",
-              "name": "UUID"
+              "kind": "integer",
+              "module": "Ash.Type.Integer",
+              "name": "Integer"
             }
           }
         ],
@@ -562,7 +588,7 @@
             "args": [
               {
                 "kind": "concrete",
-                "type_ref": "Ash.Type.UtcDatetime"
+                "type_ref": "Ash.Type.DateTime"
               },
               {
                 "kind": "concrete",
@@ -578,7 +604,35 @@
             "args": [
               {
                 "kind": "concrete",
-                "type_ref": "Ash.Type.UtcDatetime"
+                "type_ref": "Ash.Type.DateTime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.NaiveDatetime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Integer"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.DurationName"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.NaiveDatetime"
               },
               {
                 "kind": "concrete",
@@ -617,6 +671,14 @@
               {
                 "kind": "concrete",
                 "type_ref": "Ash.Type.DurationName"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
               }
             ]
           }
@@ -880,6 +942,118 @@
         "signatures": [
           {
             "args": []
+          }
+        ]
+      },
+      {
+        "description": "Returns true if two ranges are adjacent, meeting with no gap and no shared point.\n\nThe seam counts only when exactly one side includes it. Symmetric, and an empty\nrange is adjacent to nothing.\n\n   range_adjacent(range1, range2)\n",
+        "module": "Ash.Query.Function.RangeAdjacent",
+        "name": "range_adjacent",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "ref"
+              },
+              {
+                "kind": "ref"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns true if a range holds a value, which may be a point or another range.\n\nAn unbounded end holds everything beyond it, and an empty range holds no point. A\nbound holds its own value only when it is inclusive.\n\n   range_contains(range, value)\n",
+        "module": "Ash.Query.Function.RangeContains",
+        "name": "range_contains",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "ref"
+              },
+              {
+                "kind": "ref"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "ref"
+              },
+              {
+                "kind": "same"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns a range's lower endpoint, of its inner type.\n\nNil where the range is unbounded at that end, and where it is empty.\n\n   range_lower(range)\n",
+        "module": "Ash.Query.Function.RangeLower",
+        "name": "range_lower",
+        "predicate": false,
+        "returns": {
+          "kind": "any"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "any"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns true if two ranges overlap (share at least one point).\n\nMaps to the Postgres range overlap operator `&&`, and answers in an expression what\n`Ash.Range.intersects?/2` answers at runtime. Used, among other things, to relate\ntwo temporal resources (`range_overlaps(parent(valid_at), valid_at)`).\n\n   range_overlaps(range1, range2)\n",
+        "module": "Ash.Query.Function.RangeOverlaps",
+        "name": "range_overlaps",
+        "predicate": true,
+        "returns": {
+          "kind": "concrete",
+          "type_ref": "Ash.Type.Boolean"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "ref"
+              },
+              {
+                "kind": "ref"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Returns a range's upper endpoint, of its inner type.\n\nNil where the range is unbounded at that end, and where it is empty.\n\n   range_upper(range)\n",
+        "module": "Ash.Query.Function.RangeUpper",
+        "name": "range_upper",
+        "predicate": false,
+        "returns": {
+          "kind": "any"
+        },
+        "signatures": [
+          {
+            "args": [
+              {
+                "kind": "any"
+              }
+            ]
           }
         ]
       },
@@ -1269,7 +1443,7 @@
         ]
       },
       {
-        "description": "Trims whitespace from a string\n",
+        "description": "Returns the length of a string.\n\nWithout a unit argument, the length is counted in codepoints, unless the\nbackwards-compatibility key `config :ash, :default_string_length_count` is set to\n`:mixed`, in which case it is counted in graphemes (see the backwards compatibility\nguide). An optional second argument selects a unit explicitly:\n\n- `:graphemes` - counts unicode graphemes, i.e `String.length/1`.\n- `:codepoints` - counts unicode codepoints. This matches how most SQL data layers\n  count the length of a string.\n- `:bytes` - counts bytes, i.e `byte_size/1`.\n\nA single grapheme may be made up of an unbounded number of codepoints\n(e.g. a base character followed by many combining marks), so counting graphemes\nplaces no effective bound on the size of a value. Use `:codepoints` or `:bytes`\nwhen the length is being used as a limit.\n\nData layers cannot count graphemes, so `:graphemes` is only supported where the\nexpression is evaluated in Elixir. Note that `string_length/1` is translated to the\ndata layer's native length function, which counts codepoints, regardless of the\nconfigured default.\n\n    string_length(name)\n    string_length(name, :bytes)\n",
         "module": "Ash.Query.Function.StringLength",
         "name": "string_length",
         "predicate": false,
@@ -1293,6 +1467,32 @@
                 "type_ref": "Ash.Type.CiString"
               }
             ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.String"
+              },
+              {
+                "constraints": "[one_of: [:graphemes, :codepoints, :bytes]]",
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Atom"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.CiString"
+              },
+              {
+                "constraints": "[one_of: [:graphemes, :codepoints, :bytes]]",
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Atom"
+              }
+            ]
           }
         ]
       },
@@ -1303,7 +1503,7 @@
         "predicate": false,
         "returns": {
           "kind": "concrete",
-          "type_ref": "Ash.Type.String"
+          "type_ref": "Ash.Type.Integer"
         },
         "signatures": [
           {
@@ -2052,6 +2252,186 @@
                 "kind": "any"
               }
             ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Date"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Date"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Date"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.DateTime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.DateTime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.DateTime"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.UtcDatetime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.UtcDatetime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.UtcDatetime"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.UtcDatetimeUsec"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.UtcDatetimeUsec"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.UtcDatetimeUsec"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.NaiveDatetime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.NaiveDatetime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.NaiveDatetime"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Time"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Time"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Time"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.TimeUsec"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.TimeUsec"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.TimeUsec"
+              }
+            ]
           }
         ]
       },
@@ -2122,6 +2502,186 @@
                 "kind": "any"
               }
             ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Date"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Date"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.DateTime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.DateTime"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.UtcDatetime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.UtcDatetime"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.UtcDatetimeUsec"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.UtcDatetimeUsec"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.NaiveDatetime"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.NaiveDatetime"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Time"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Time"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.TimeUsec"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              }
+            ]
+          },
+          {
+            "args": [
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.Duration"
+              },
+              {
+                "kind": "concrete",
+                "type_ref": "Ash.Type.TimeUsec"
+              }
+            ]
           }
         ]
       }
@@ -2133,6 +2693,9 @@
       "is_distinct_from",
       "is_not_distinct_from",
       "intersects",
+      "range_adjacent",
+      "range_contains",
+      "range_overlaps",
       "string_ends_with",
       "string_starts_with"
     ],
@@ -2353,7 +2916,7 @@
             "module": "Ash.Type.UUID",
             "name": "UUID"
           },
-          "writable": false
+          "writable": true
         },
         "inserted_at": {
           "allow_nil": false,
@@ -2537,72 +3100,6 @@
             "name": "Boolean"
           },
           "writable": false
-        },
-        "parent_id": {
-          "allow_nil": true,
-          "filter_custom_expressions": [],
-          "filter_functions": [
-            {
-              "name": "is_distinct_from",
-              "rhs": "same"
-            },
-            {
-              "name": "is_not_distinct_from",
-              "rhs": "same"
-            }
-          ],
-          "filter_operators": [
-            {
-              "name": "is_nil",
-              "rhs": {
-                "concrete": "Ash.Type.Boolean"
-              }
-            },
-            {
-              "name": "==",
-              "rhs": "same"
-            },
-            {
-              "name": "!=",
-              "rhs": "same"
-            },
-            {
-              "name": "in",
-              "rhs": {
-                "array": "same"
-              }
-            },
-            {
-              "name": "<",
-              "rhs": "same"
-            },
-            {
-              "name": ">",
-              "rhs": "same"
-            },
-            {
-              "name": "<=",
-              "rhs": "same"
-            },
-            {
-              "name": ">=",
-              "rhs": "same"
-            }
-          ],
-          "filterable": true,
-          "has_default": false,
-          "kind": "attribute",
-          "primary_key": false,
-          "select_by_default": true,
-          "sensitive": false,
-          "sortable": true,
-          "type": {
-            "allow_nil": null,
-            "kind": "uuid",
-            "module": "Ash.Type.UUID",
-            "name": "UUID"
-          },
-          "writable": true
         },
         "priority": {
           "allow_nil": true,
@@ -2803,6 +3300,138 @@
             "name": "String"
           },
           "writable": true
+        },
+        "updated_at": {
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": true,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "utc_datetime_usec",
+            "module": "Ash.Type.UtcDatetimeUsec",
+            "name": "UtcDateTimeUsec"
+          },
+          "writable": false
+        },
+        "version": {
+          "allow_nil": false,
+          "filter_custom_expressions": [],
+          "filter_functions": [
+            {
+              "name": "is_distinct_from",
+              "rhs": "same"
+            },
+            {
+              "name": "is_not_distinct_from",
+              "rhs": "same"
+            }
+          ],
+          "filter_operators": [
+            {
+              "name": "is_nil",
+              "rhs": {
+                "concrete": "Ash.Type.Boolean"
+              }
+            },
+            {
+              "name": "==",
+              "rhs": "same"
+            },
+            {
+              "name": "!=",
+              "rhs": "same"
+            },
+            {
+              "name": "in",
+              "rhs": {
+                "array": "same"
+              }
+            },
+            {
+              "name": "<",
+              "rhs": "same"
+            },
+            {
+              "name": ">",
+              "rhs": "same"
+            },
+            {
+              "name": "<=",
+              "rhs": "same"
+            },
+            {
+              "name": ">=",
+              "rhs": "same"
+            }
+          ],
+          "filterable": true,
+          "has_default": true,
+          "kind": "attribute",
+          "primary_key": false,
+          "select_by_default": true,
+          "sensitive": false,
+          "sortable": true,
+          "type": {
+            "allow_nil": null,
+            "kind": "integer",
+            "module": "Ash.Type.Integer",
+            "name": "Integer"
+          },
+          "writable": true
         }
       },
       "module": "TodoServer.Todo",
@@ -2820,26 +3449,6 @@
           "sortable": true,
           "source_attribute": "list_id",
           "type": "belongs_to"
-        },
-        "parent": {
-          "allow_nil": true,
-          "cardinality": "one",
-          "destination": "TodoServer.Todo",
-          "destination_attribute": "id",
-          "filterable": true,
-          "sortable": true,
-          "source_attribute": "parent_id",
-          "type": "belongs_to"
-        },
-        "subtasks": {
-          "allow_nil": true,
-          "cardinality": "many",
-          "destination": "TodoServer.Todo",
-          "destination_attribute": "parent_id",
-          "filterable": true,
-          "sortable": true,
-          "source_attribute": "id",
-          "type": "has_many"
         }
       },
       "validations": [

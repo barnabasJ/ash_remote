@@ -20,6 +20,15 @@ defmodule AshRemote.GenTest do
     |> Map.fetch!(:source)
   end
 
+  test "generated read actions leave argument capture to the data layer", %{
+    manifest: manifest
+  } do
+    source = todo_source(manifest)
+
+    assert source =~ "argument :status"
+    refute source =~ "prepare AshRemote.CaptureArguments"
+  end
+
   defp update_todo_field(manifest, name, fun) do
     key = "AshRemote.Backend.Todo"
     todo = manifest.resources[key]

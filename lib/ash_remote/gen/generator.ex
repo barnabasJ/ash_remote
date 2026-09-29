@@ -612,9 +612,6 @@ defmodule AshRemote.Gen do
       ([primary?(action), if(action.get?, do: "    get? true")] ++
          argument_lines(action.inputs, ctx) ++
          [
-           # Carries this call's argument VALUES to the data layer (the
-           # argument lines above only declare their names/types).
-           "    prepare AshRemote.CaptureArguments",
            # Records requested remote calculations in query context so the
            # data layer can prefetch them in the same request.
            "    prepare AshRemote.PrefetchCalculations"
@@ -805,7 +802,7 @@ defmodule AshRemote.Gen do
   # dot-segment a safe Elixir alias component) closes both the `defmodule
   # #{module} do` injection point and — since `Macro.underscore/1` of a
   # validated alias can never contain a `/` or `..` — the file-path
-  # derivation in `Mix.Tasks.AshRemote.Gen.output_path/2`.
+  # derivation in `AshCloner.output_path/2`.
   defp client_module(backend_module, ctx) do
     Identifier.validate_module!(backend_module, "module name")
     AshCloner.Namespace.reprefix(backend_module, ctx.prefix, ctx.namespace)

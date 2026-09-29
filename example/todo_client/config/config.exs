@@ -3,10 +3,15 @@ import Config
 # The generated client resources reach the backend via ash_remote; base_url is
 # resolved lazily at call time so one build works across environments.
 config :ash_remote, base_url: System.get_env("TODO_SERVER_URL", "http://127.0.0.1:4010")
+config :ash_remote, transport_module: TodoClient.Remote.Transport
 
 # The client layers an ETS cache over the remote data layer via
 # ash_multi_datalayer. v1 is single-node-only; this acknowledges it.
 config :ash_multi_datalayer, :assume_single_node, true
+
+# This local demo opts into human-readable row labels in read telemetry.
+# The library emits none unless an application supplies a labeler.
+config :ash_multi_datalayer, :telemetry_row_labeler, {TodoClient.CacheStats, :row_label, []}
 
 # Log every RPC the client makes (URL, resource/action, outcome, duration,
 # request/response bodies) — Ecto-style visibility into the wire traffic.
@@ -83,6 +88,7 @@ if config_env() == :test do
 end
 
 config :ash, :validate_domain_config_inclusion?, false
+config :ash, :default_string_length_count, :codepoints
 
 # The generated `remote(...)` calcs use ash_remote's custom expression; a
 # downstream app generating clients must register it (compile-time).

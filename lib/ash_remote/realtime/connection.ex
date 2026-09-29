@@ -97,7 +97,10 @@ if Code.ensure_loaded?(Slipstream) do
 
     @impl Slipstream
     def handle_message(_topic, "notification", payload, socket) do
-      Inbound.replicate(payload, socket.assigns.inbound)
+      if notification_enabled?(socket.assigns.opts.notification_enabled?) do
+        Inbound.replicate(payload, socket.assigns.inbound)
+      end
+
       {:ok, socket}
     end
 
@@ -174,6 +177,10 @@ if Code.ensure_loaded?(Slipstream) do
     defp eval(fun) when is_function(fun, 0), do: fun.()
     defp eval(params) when is_map(params), do: params
     defp eval(nil), do: %{}
+
+    defp notification_enabled?(nil), do: true
+    defp notification_enabled?({module, fun, args}), do: apply(module, fun, args)
+    defp notification_enabled?(fun) when is_function(fun, 0), do: fun.()
 
     # Merge params into the ws URI query string, so they arrive as `params` in the
     # server socket's `connect/3`.

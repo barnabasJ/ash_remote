@@ -73,13 +73,12 @@
   `remote` block. Ownership is defined by **manifest membership**, recomputed at
   regen time: entities the manifest declares are generator-owned; anything else
   in the file is user-added and ignored.
-- `mix ash_remote.gen` implements this with the stock Igniter composition, not a
-  bespoke diff engine: a module that doesn't exist is created whole; an existing
-  module gains only the manifest entities it's missing, via
-  `Ash.Resource.Igniter.add_new_attribute/ add_new_relationship/add_new_action`
-  (+ `Ash.Domain.Igniter.add_resource_reference` for the domain). User edits to
-  generated entities and user-added code are never touched, and regen with an
-  unchanged manifest is a no-op (covered by `test/mix/ash_remote_gen_test.exs`).
+- `mix ash_remote.gen` translates the manifest into `AshCloner.Definition`s,
+  then delegates placement, creation, entity merge, and drift reconciliation to
+  `AshCloner.apply_definitions/3`. A module that doesn't exist is created
+  whole; an existing module gains only missing manifest entities. User edits
+  and additions are preserved, and regen with an unchanged manifest is a no-op
+  (covered by `test/mix/ash_remote_gen_test.exs`).
 - Drift is detected but never auto-resolved: an entity that _differs_ from the
   manifest (user edit, or the server changed it) and an entity _absent_ from the
   manifest (user-added, or the server removed it) are indistinguishable cases,
@@ -547,15 +546,14 @@ entities) and a generic `mix ash_cloner.clone` task.
 
 What stayed: the manifest side (`Manifest.Loader`, `AshRemote.Gen`,
 `Gen.Identifier` + `InvalidManifestError` — manifest trust is ash_remote's
-concern; the engine takes already-validated definitions), and the task's
-`output_path/2`/`assert_contained!/3` (directly tested against the manifest
-error type; ash_cloner has its own copy raising `PathEscapeError`).
+concern; the engine takes already-validated definitions). `AshCloner` owns
+output path derivation and containment checks as well.
 
-Two seams keep the extraction invisible to ash_remote's behavior, proven by
-its gen tests passing **unmodified**: `apply_definitions`' `:labels` option
-(`[definitions: "the manifest", upstream: "the server"]` reproduces the old
-warning strings byte-for-byte) and `:path_for` (the task keeps its own
-path/error semantics). Engine invariant worth preserving: it never touches
+The `apply_definitions` `:labels` option (`[definitions: "the manifest",
+upstream: "the server"]`) preserves manifest-oriented drift warnings. The
+task passes its `--output` directory to `AshCloner`, which determines paths
+and raises `AshCloner.PathEscapeError` if a path escapes the root. Engine
+invariant worth preserving: it never touches
 the filesystem — everything stages on the `Igniter.t()`, which is what makes
 `--dry-run`/`--check` work for every task built on it.
 

@@ -3,11 +3,11 @@ defmodule TodoClient.Local.Todo do
   Offline-first todo. The LocalOutbox orchestrator makes a local SQLite layer the
   authority: every read is served from SQLite (0 RPC), every write commits to
   SQLite and co-commits an outbox entry that an Oban worker later flushes to the
-  server (`AshRemote.DataLayer`). `conflict_detection: {:stale_check, :updated_at}`
-  parks a flush whose server row moved since this client last saw it — surfaced in
-  `TodoClient.OfflineLive` for three-way resolution.
+  server (`AshRemote.DataLayer`). `conflict_detection: {:server_check, :version}`
+  sends the saved base version with updates/deletes; the server rejects a stale
+  write, which the outbox parks for three-way resolution in `TodoClient.OfflineLive`.
 
-  Conflict detection stale-checks a **client-authored `version`** (see
+  Conflict detection uses a **client-authored `version`** (see
   `TodoClient.BumpVersion`), not a timestamp. A server-assigned `updated_at` is
   unpredictable to the client — a freshly-created local row has no server
   timestamp yet — so `base_image.updated_at` could never match the server's, and
@@ -34,7 +34,7 @@ defmodule TodoClient.Local.Todo do
   multi_data_layer do
     orchestrator {AshMultiDatalayer.Orchestrator.LocalOutbox,
                   outbox_resource: TodoClient.Sync.OutboxEntry,
-                  conflict_detection: {:stale_check, :version},
+                  conflict_detection: {:server_check, :version},
                   hydrate: :manual}
 
     layer :local, AshSqlite.DataLayer
@@ -54,7 +54,7 @@ defmodule TodoClient.Local.Todo do
 
   sqlite do
     table "local_todos"
-    repo TodoClient.Repo
+    repo(TodoClient.Repo)
   end
 
   actions do

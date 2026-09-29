@@ -27,6 +27,7 @@ defmodule TodoClient.Layout do
         <nav style="display:flex; gap:.25rem; padding:.5rem .75rem; border-bottom:1px solid #eee; font-family:system-ui, sans-serif; font-size:.85rem; align-items:center;">
           <strong style="margin-right:.75rem; color:#333;">ash_remote demo</strong>
           <a href="/" style="padding:.3rem .7rem; border-radius:.4rem; text-decoration:none; color:#1a56c4; background:#eef3ff;">Online (cache)</a>
+          <a href="/ledger" style="padding:.3rem .7rem; border-radius:.4rem; text-decoration:none; color:#1a56c4; background:#eef3ff;">Coverage ledger</a>
           <a href="/offline" style="padding:.3rem .7rem; border-radius:.4rem; text-decoration:none; color:#1a56c4; background:#eef3ff;">Offline (local-first)</a>
           <a href="/oban" style="padding:.3rem .7rem; border-radius:.4rem; text-decoration:none; color:#7a3ba8; background:#f4ecfb;">Oban Web</a>
         </nav>

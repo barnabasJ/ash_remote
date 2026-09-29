@@ -29,6 +29,9 @@ defmodule AshRemote.Error do
       "not_found" ->
         Ash.Error.Query.NotFound.exception([])
 
+      "stale_record" ->
+        Ash.Error.Changes.StaleRecord.exception(resource: nil)
+
       "required" ->
         Ash.Error.Changes.Required.exception(
           field: field || :unknown,

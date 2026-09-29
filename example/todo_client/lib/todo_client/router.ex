@@ -15,6 +15,7 @@ defmodule TodoClient.Router do
     pipe_through(:browser)
     live("/", TodoClient.Live)
     live("/offline", TodoClient.OfflineLive)
+    live("/ledger", TodoClient.LedgerLive)
     # The Oban dashboard — watch the LocalOutbox flush jobs (queue :todo_sync)
     # enqueue and drain in real time.
     oban_dashboard("/oban")

@@ -84,8 +84,8 @@ Open both pages (Ada + Grace). Each client instance serves two demos:
 **`/` — the ProvenCoverage cache demo:**
 
 1. On Grace's page, click through the Browse panel's status/priority tabs on one
-   list. Watch the sticky cache bar: the first click on each filter is a
-   miss+backfill, repeating it (or a narrower subset) is a pure hit.
+   list. The tabs reuse the todos loaded with the lists, so they make no new
+   RPCs. Refresh to see whether that list read was served from ETS or the server.
 2. On Ada's page, toggle or edit a todo Grace can see. Watch Grace's page
    refetch live — and her cache bar: a new miss+backfill for the filter(s) the
    changed row matched, `invalidations` incrementing by the dropped-entry
@@ -102,9 +102,17 @@ Open both pages (Ada + Grace). Each client instance serves two demos:
 5. Add a **public** list/todo on either page → it appears live on both.
 
 **`/offline` — the LocalOutbox demo:** toggle offline, edit local-first while
-queued in the outbox, then go back online and resolve a stale-check conflict
+queued in the outbox, then go back online and resolve a server-reported conflict
 with the three-way (Keep mine / Take theirs / Retry) UI. The `/oban` page shows
 the outbox flush jobs draining.
+
+**`/ledger` — the ProvenCoverage ledger:** open this page alongside `/` to see
+each client's current Todo and TodoList coverage filters, loaded fields, and
+normalised intervals. It refreshes every two seconds and reads the local ledger
+without issuing an RPC or warming the cache. Each client instance has its own
+ledger, so compare the two pages as you browse or change shared todos. The
+offline `LocalOutbox` stack has no coverage ledger: its local SQLite layer is
+authoritative, and its pending writes are held in the durable outbox.
 
 ## Automated tests
 

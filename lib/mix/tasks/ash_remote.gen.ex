@@ -66,44 +66,13 @@ defmodule Mix.Tasks.AshRemote.Gen do
         base_url: options[:base_url]
       )
 
-    # The create/ensure-missing/drift-reconcile engine lives in ash_cloner;
-    # `output_path/2` stays ours for its manifest-specific error type.
+    # AshRemote translates the manifest into definitions; AshCloner owns their
+    # placement, creation, entity merge, and drift reconciliation.
     AshCloner.apply_definitions(igniter, definitions,
       interactive: options[:interactive] || false,
-      path_for: &output_path(output, &1),
+      output: output,
       labels: [definitions: "the manifest", upstream: "the server"]
     )
-  end
-
-  # `AshRemote.Gen.generate/2` already refuses (via `AshRemote.Gen.Identifier`)
-  # any manifest module name whose `Macro.underscore/1` could contain a `/` or
-  # `..`, so `definition.module` reaching this function is never
-  # attacker-controlled in practice. `assert_contained!/3` is the
-  # belt-and-suspenders second layer the L6 task spec asks for regardless:
-  # an explicit, independently-testable assertion that the resolved path
-  # never escapes `output`, so a future change to either the identifier
-  # validator or `Macro.underscore/1` itself can't silently reopen the gap.
-  # `@doc false` (not `defp`) purely so tests can call these directly.
-  @doc false
-  def output_path(output, module) do
-    path = Path.join(output, Macro.underscore(module) <> ".ex")
-    :ok = assert_contained!(output, path, module)
-    path
-  end
-
-  @doc false
-  def assert_contained!(output, path, module) do
-    root = Path.expand(output)
-    resolved = Path.expand(path)
-
-    if resolved == root or String.starts_with?(resolved, root <> "/") do
-      :ok
-    else
-      raise AshRemote.Gen.InvalidManifestError,
-        message:
-          "generated path #{inspect(path)} (from module #{inspect(module)}) escapes the " <>
-            "configured output root #{inspect(output)}"
-    end
   end
 
   defp require_option!(options, key) do

@@ -22,6 +22,11 @@ defmodule AshRemote.ErrorTest do
              Error.to_exception(%{"type" => "forbidden", "message" => "no"})
   end
 
+  test "maps stale writes to a recognizable conflict error" do
+    assert %Ash.Error.Changes.StaleRecord{} =
+             Error.to_exception(%{"type" => "stale_record", "message" => "stale"})
+  end
+
   test "unknown types fall back to UnknownError with the message" do
     error = Error.to_exception(%{"type" => "weird", "message" => "boom"})
     assert %Ash.Error.Unknown.UnknownError{error: "boom"} = error

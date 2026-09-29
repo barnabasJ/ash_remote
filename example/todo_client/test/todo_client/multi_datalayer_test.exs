@@ -18,12 +18,14 @@ defmodule TodoClient.MultiDatalayerTest do
 
       query = Ash.Query.filter(Todo, list_id == ^list.id)
 
-      assert [%{title: "Walk the dog"}] = Ash.read!(query, actor: actor())
+      assert [%{title: "Walk the dog"} = remote] = Ash.read!(query, actor: actor())
+      assert Ash.Resource.get_metadata(remote, :served_from_layer) == AshRemote.DataLayer
       assert_receive {:mdl, [_, :read, :miss], _, %{reason: :no_coverage_entry}}
       assert_receive {:mdl, [_, :read, :backfill], _, _}
       after_first = rpc()
 
-      assert [%{title: "Walk the dog"}] = Ash.read!(query, actor: actor())
+      assert [%{title: "Walk the dog"} = cached] = Ash.read!(query, actor: actor())
+      assert Ash.Resource.get_metadata(cached, :served_from_layer) == Ash.DataLayer.Ets
       assert rpc() == after_first
       assert_receive {:mdl, [_, :read, :hit], _, _}
     end

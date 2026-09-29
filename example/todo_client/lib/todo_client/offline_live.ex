@@ -10,8 +10,8 @@ defmodule TodoClient.OfflineLive do
     2. Hit **Go offline** on both — `LocalOutbox.pause_sync/1` pauses the flush
        queue; edits now queue locally (red banner).
     3. Edit the same todo differently on each. Bring A online (**Go online**) —
-       its update flushes and wins; bring B online — its flush stale-checks,
-       finds the server moved, and **parks the entry as a conflict**.
+       its update flushes and wins; bring B online — the server rejects its
+       old base version, and the outbox **parks the entry as a conflict**.
     4. The Conflicts panel shows mine (local) / base / theirs (server)
        field-by-field; resolve with Keep mine (force) / Take theirs (discard
        local) / Retry.
@@ -25,7 +25,7 @@ defmodule TodoClient.OfflineLive do
   alias AshMultiDatalayer.Orchestrator.LocalOutbox
   alias TodoClient.Local.Todo
 
-  # `version` is the stale-check field (client-authored, see TodoClient.BumpVersion);
+  # `version` is the conflict field (client-authored, see TodoClient.BumpVersion);
   # showing it in the three-way diff makes the conflict cause legible.
   @fields ~w(title completed priority due_date public version updated_at)
   @tick_ms 2500
@@ -54,7 +54,7 @@ defmodule TodoClient.OfflineLive do
   # A peer's server-side change arrived over the realtime socket; ExternalChange
   # already refreshed local, so just re-read and re-render (push, not poll).
   @impl true
-  def handle_info({:remote_change, _resource, _type}, socket) do
+  def handle_info({:remote_change, _resource, _type, _id}, socket) do
     {:noreply, load(socket)}
   end
 
@@ -132,8 +132,8 @@ defmodule TodoClient.OfflineLive do
       # Coming online: reconcile BEFORE draining. refresh(:all) closes the gap of
       # changes other clients made while we were offline — the dirty-chain rule
       # skips any PK we edited locally, so catching up never clobbers our queued
-      # work. THEN resume the queue: the flush stale-checks each entry against the
-      # now-fresh server state, parking a conflict only for rows that truly moved.
+      # work. THEN resume the queue: each queued write carries its base version,
+      # and the server rejects stale updates/deletes for the outbox to park.
       safe_refresh()
       LocalOutbox.resume_sync(Todo)
     else

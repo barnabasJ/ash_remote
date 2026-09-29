@@ -74,6 +74,11 @@ defmodule AshRemote.MultiDatalayer.LifecycleGuard do
     GenServer.start_link(__MODULE__, opts, name: Keyword.get(opts, :name, __MODULE__))
   end
 
+  @doc "Run the same strategy-specific gap reconciliation used after a websocket resubscription."
+  def reconcile_gap(resource, tenant \\ nil) do
+    reconcile(resource, tenant, :manual_reconnect)
+  end
+
   @impl true
   def init(opts) do
     names =

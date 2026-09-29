@@ -27,6 +27,10 @@ defmodule AshRemote.Realtime do
     * `:tenant` — `nil | tenant | {m,f,a}`, the tenant segment for every topic.
     * `:echo` — `:suppress` (default) drops the broadcast copy of the client's
       own writes; `:deliver` delivers them (marked `origin: :remote`).
+    * `:notification_enabled?` — optional zero-argument function or `{m,f,a}`
+      checked for each incoming notification. When false, the notification is
+      discarded before replication. After re-enabling it, reconcile the missed
+      gap through `AshRemote.MultiDatalayer.LifecycleGuard.reconcile_gap/2`.
     * `:name` — supervisor/registry base name (default `AshRemote.Realtime`).
 
   ## Lifecycle
@@ -158,6 +162,7 @@ defmodule AshRemote.Realtime do
       registry: registry,
       reconnect_after_msec: Keyword.get(opts, :reconnect_after_msec, @default_reconnect),
       rejoin_after_msec: Keyword.get(opts, :rejoin_after_msec, @default_rejoin),
+      notification_enabled?: Keyword.get(opts, :notification_enabled?),
       inbound: %{sources: sources, echo: Keyword.get(opts, :echo, :suppress)}
     }
 

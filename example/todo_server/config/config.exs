@@ -44,6 +44,7 @@ config :todo_server,
   port: String.to_integer(System.get_env("PORT", "4010"))
 
 config :ash, :validate_domain_config_inclusion?, false
+config :ash, :default_string_length_count, :codepoints
 
 # These enable behaviors that will become the default in the next major
 # version of Ash. Setting them now opts this app into the new behavior and
