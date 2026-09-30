@@ -29,6 +29,17 @@ defmodule AshRemote.GenTest do
     refute source =~ "prepare AshRemote.CaptureArguments"
   end
 
+  @tag skip:
+         "TODO: ash_remote.gen must preserve writable? from the manifest for UUID keys and server-owned timestamps"
+  test "generated attributes preserve the manifest's writability", %{manifest: manifest} do
+    manifest = update_todo_field(manifest, "id", &%{&1 | writable?: true})
+    manifest = update_todo_field(manifest, "completed", &%{&1 | writable?: false})
+    source = todo_source(manifest)
+
+    assert source =~ "uuid_primary_key :id, writable?: true"
+    assert source =~ "attribute :completed, :boolean, public?: true, writable?: false"
+  end
+
   defp update_todo_field(manifest, name, fun) do
     key = "AshRemote.Backend.Todo"
     todo = manifest.resources[key]

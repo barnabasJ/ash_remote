@@ -21,6 +21,7 @@ defmodule TodoServer.TodoList do
 
     create :create do
       primary? true
+      accept [:id, :name, :public]
       change relate_actor(:user)
     end
 
@@ -41,7 +42,14 @@ defmodule TodoServer.TodoList do
   end
 
   attributes do
-    uuid_primary_key :id
+    attribute :id, :uuid do
+      primary_key? true
+      allow_nil? false
+      writable? true
+      default &Ash.UUID.generate/0
+      public? true
+    end
+
     attribute :name, :string, public?: true, allow_nil?: false
     # Public lists are visible to (and replicated to) every user.
     attribute :public, :boolean, public?: true, default: false, allow_nil?: false

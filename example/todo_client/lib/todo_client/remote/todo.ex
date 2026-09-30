@@ -5,15 +5,14 @@ defmodule TodoClient.Remote.Todo do
   # an ETS cache; since `AshRemote.DataLayer` is no longer the top-level
   # `data_layer:`, its `remote do ... end` section needs `extensions:
   # [AshRemote.DataLayer]` explicitly (a plain regen gets it for free); and
-  # added AshRemote.MultiDatalayer.ChangeNotifier (FIRST in the list — see its
-  # moduledoc for why, and why this must be a literal list rather than built
-  # via a helper call) so a realtime notification invalidates this client's
-  # cache before the UI refetches.
+  # added TodoClient.RemoteChangeNotifier first so peer notifications invalidate
+  # the cache before the UI refetches, while this client's own websocket echo
+  # does not invalidate the cache a second time.
   use Ash.Resource,
     domain: TodoClient.Remote.Domain,
     data_layer: AshMultiDatalayer.DataLayer,
     extensions: [AshRemote.DataLayer],
-    notifiers: [AshRemote.MultiDatalayer.ChangeNotifier, TodoClient.RealtimeBridge],
+    notifiers: [TodoClient.RemoteChangeNotifier, TodoClient.RealtimeBridge],
     # Mirrored from the manifest, not hand-authored: the primary read carries
     # the server's validations, which Ash's primary-read verifier flags as a
     # likely mistake. `mix ash_remote.gen` emits this on every resource now.

@@ -54,9 +54,77 @@ defmodule TodoClient.LiveTest do
     socket = event(socket, "toggle", %{"id" => todo.id})
     assert assigned_list(socket, list.id).todos |> hd() |> Map.fetch!(:completed)
 
+    # The write's realtime echo describes the version already displayed. It
+    # must not invalidate and refetch the same list a second time.
+    current = assigned_list(socket, list.id).todos |> hd()
+    rpc_count = CountingRouter.rpc_count()
+
+    {:noreply, socket} =
+      TodoClient.Live.handle_info(
+        {:remote_change, Todo, :update, current.id, current},
+        socket
+      )
+
+    assert CountingRouter.rpc_count() == rpc_count
+
+    {:noreply, socket} =
+      TodoClient.Live.handle_info(
+        {:remote_change, TodoClient.Local.Todo, :update, current.id, current},
+        socket
+      )
+
+    assert CountingRouter.rpc_count() == rpc_count
+
     socket = event(socket, "delete", %{"id" => todo.id})
     assert assigned_list(socket, list.id).todos == []
     assert Ash.read!(TodoServer.Todo, authorize?: false) == []
+  end
+
+  test "toggling one todo fetches only that todo and retains one coverage entry", %{list: list} do
+    yesterday = Date.add(Date.utc_today(), -1)
+    first = server_create_todo!(%{title: "First", list_id: list.id, due_date: yesterday})
+    second = server_create_todo!(%{title: "Second", list_id: list.id, due_date: yesterday})
+    socket = mount()
+    assert titles(socket, list.id) == ["First", "Second"]
+    assert Enum.all?(assigned_list(socket, list.id).todos, & &1.overdue?)
+
+    handler = "todo-toggle-remainder-#{System.unique_integer([:positive])}"
+    parent = self()
+
+    :telemetry.attach(
+      handler,
+      [:ash_multi_datalayer, :read, :partial],
+      fn event, _, metadata, _ ->
+        if metadata.resource == Todo, do: send(parent, {event, metadata})
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+
+    assert length(AshMultiDatalayer.Coverage.entries(Todo, nil)) == 1
+    rpc_before = CountingRouter.rpc_count()
+    socket = event(socket, "toggle", %{"id" => first.id})
+
+    assert_receive {[:ash_multi_datalayer, :read, :partial], %{cached: 1, fetched: 1}}
+    assert CountingRouter.rpc_count() == rpc_before + 2
+
+    assert assigned_list(socket, list.id).todos
+           |> Enum.find(&(&1.id == first.id))
+           |> Map.fetch!(:completed)
+
+    todos = assigned_list(socket, list.id).todos
+
+    assert Ash.Resource.get_metadata(Enum.find(todos, &(&1.id == first.id)), :served_from_layer) ==
+             AshRemote.DataLayer
+
+    assert Ash.Resource.get_metadata(Enum.find(todos, &(&1.id == second.id)), :served_from_layer) ==
+             Ash.DataLayer.Ets
+
+    refute Enum.find(todos, &(&1.id == first.id)).overdue?
+    assert Enum.find(todos, &(&1.id == second.id)).overdue?
+
+    assert length(AshMultiDatalayer.Coverage.entries(Todo, nil)) == 1
   end
 
   test "online page keeps covered reads while offline and catches up on reconnect", %{
@@ -134,6 +202,9 @@ defmodule TodoClient.LiveTest do
     assert Phoenix.Flash.get(socket.assigns.flash, :error) =~ "Conflict"
     refute Ash.get!(TodoServer.Todo, todo.id, authorize?: false).completed
     assert titles(socket, list.id) == ["Changed by Grace"]
+
+    socket = event(socket, "dismiss-flash", %{"kind" => "error"})
+    assert Phoenix.Flash.get(socket.assigns.flash, :error) == nil
 
     # A fresh display can write; a second stale display cannot delete it.
     stale_socket = mount()
@@ -249,6 +320,92 @@ defmodule TodoClient.LiveTest do
     assert assigned_list(socket, other_list.id).todos == []
   end
 
+  test "the shared form accepts explicit public and private visibility", %{list: list} do
+    socket = mount()
+
+    socket =
+      event(socket, "save", %{
+        "todo" => %{"title" => "Shared one", "list_id" => list.id, "public" => "true"}
+      })
+
+    assert Enum.find(socket.assigns.todos, &(&1.title == "Shared one")).public
+    assert Phoenix.Flash.get(socket.assigns.flash, :error) == nil
+
+    socket = event(socket, "add_list", %{"name" => "Shared", "public" => "true"})
+    public_list = Enum.find(socket.assigns.lists, &(&1.name == "Shared"))
+
+    socket =
+      socket
+      |> event("save", %{
+        "todo" => %{
+          "title" => "Shared in public list",
+          "list_id" => public_list.id,
+          "public" => "true"
+        }
+      })
+      |> event("save", %{
+        "todo" => %{"title" => "Personal one", "list_id" => list.id, "public" => "false"}
+      })
+
+    assert Enum.find(socket.assigns.todos, &(&1.title == "Shared one")).public
+    assert Enum.find(socket.assigns.todos, &(&1.title == "Shared in public list")).public
+    refute Enum.find(socket.assigns.todos, &(&1.title == "Personal one")).public
+  end
+
+  test "a public todo requires permission to read its list", %{list: private_list} do
+    grace = register!("grace-list-access@example.com")
+
+    public_list =
+      TodoServer.TodoList
+      |> Ash.Changeset.for_create(:create, %{name: "Open list", public: true},
+        actor: TodoClient.Session.actor()
+      )
+      |> Ash.create!(actor: TodoClient.Session.actor())
+
+    hidden =
+      server_create_todo!(%{title: "Hidden public todo", list_id: private_list.id, public: true})
+
+    visible =
+      server_create_todo!(%{title: "Visible public todo", list_id: public_list.id, public: true})
+
+    private =
+      server_create_todo!(%{title: "Private todo", list_id: public_list.id, public: false})
+
+    grace_ids =
+      TodoServer.Todo
+      |> Ash.read!(actor: grace)
+      |> MapSet.new(& &1.id)
+
+    refute MapSet.member?(grace_ids, hidden.id)
+    assert MapSet.member?(grace_ids, visible.id)
+    refute MapSet.member?(grace_ids, private.id)
+
+    assert Enum.any?(
+             Ash.read!(TodoServer.Todo, actor: TodoClient.Session.actor()),
+             &(&1.id == hidden.id)
+           )
+  end
+
+  test "error flashes can be dismissed", %{list: list} do
+    socket = mount() |> event("network-toggle", %{})
+
+    socket =
+      event(socket, "save", %{"todo" => %{"title" => "Blocked todo", "list_id" => list.id}})
+
+    assert Phoenix.Flash.get(socket.assigns.flash, :error) =~ "offline"
+
+    html =
+      socket.assigns
+      |> TodoClient.Live.render()
+      |> Phoenix.HTML.Safe.to_iodata()
+      |> IO.iodata_to_binary()
+
+    assert html =~ "dismiss-flash"
+
+    socket = event(socket, "dismiss-flash", %{"kind" => "error"})
+    assert Phoenix.Flash.get(socket.assigns.flash, :error) == nil
+  end
+
   test "the mirrored string_length validation rejects short titles client-side", %{list: list} do
     socket = mount() |> event("save", %{"todo" => %{"title" => "ab", "list_id" => list.id}})
 
@@ -358,7 +515,7 @@ defmodule TodoClient.LiveTest do
     assert refreshed.title == "After change"
     assert Ash.Resource.get_metadata(refreshed, :served_from_layer) == AshRemote.DataLayer
     assert socket.assigns.browse_todos == assigned_list(socket, list.id).todos
-    assert todo_read_decisions() == [:miss]
+    assert todo_read_decisions() == [:partial]
     assert MapSet.member?(socket.assigns.remote_updated_ids, todo.id)
 
     html =

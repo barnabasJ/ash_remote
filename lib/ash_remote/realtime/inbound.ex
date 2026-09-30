@@ -37,7 +37,7 @@ defmodule AshRemote.Realtime.Inbound do
       Enum.each(entries, fn %{resource: resource, action_invert: invert} ->
         case resolve_action(resource, payload["action"], invert) do
           {:ok, action} ->
-            notify(resource, action, payload)
+            notify(resource, action, payload, config)
 
           {:skip, reason} ->
             Logger.debug(fn ->
@@ -133,7 +133,7 @@ defmodule AshRemote.Realtime.Inbound do
     end
   end
 
-  defp notify(resource, action, payload) do
+  defp notify(resource, action, payload, config) do
     domain = Ash.Resource.Info.domain(resource)
     record = decode(resource, payload["data"])
     tenant = payload["tenant"]
@@ -158,7 +158,7 @@ defmodule AshRemote.Realtime.Inbound do
       data: record,
       changeset: changeset,
       actor: nil,
-      metadata: metadata(payload)
+      metadata: metadata(payload, config)
     }
 
     Ash.Notifier.notify(notification)
@@ -179,11 +179,16 @@ defmodule AshRemote.Realtime.Inbound do
 
   defp cast_changed(_resource, _changed), do: %{}
 
-  defp metadata(payload) do
+  defp metadata(payload, config) do
     user_meta = payload["metadata"] || %{}
+
+    own_echo? =
+      not is_nil(config.client_id) and
+        get_in(payload, ["origin", "client_id"]) == config.client_id
 
     Map.put(user_meta, "ash_remote", %{
       origin: :remote,
+      own_echo?: own_echo?,
       id: payload["id"],
       occurred_at: payload["occurred_at"]
     })

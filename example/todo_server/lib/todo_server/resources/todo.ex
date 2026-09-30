@@ -55,10 +55,19 @@ defmodule TodoServer.Todo do
   end
 
   policies do
+    policy action_type(:read) do
+      # A todo can be public while its parent list is private. Reading the todo
+      # still requires access to that list. Unlisted todos keep their own
+      # owner-or-public visibility.
+      forbid_unless expr(is_nil(list_id) or list.public == true or list.user_id == ^actor(:id))
+      authorize_if relates_to_actor_via(:user)
+      authorize_if expr(public == true)
+    end
+
     # Own it OR it's public → visible AND editable by everyone (collaborative),
     # so a public todo's changes reach — and can be made by — every user. A
     # private todo is owner-only, on both RPC and realtime delivery.
-    policy action_type([:read, :update, :destroy]) do
+    policy action_type([:update, :destroy]) do
       authorize_if relates_to_actor_via(:user)
       authorize_if expr(public == true)
     end

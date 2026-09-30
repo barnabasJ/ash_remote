@@ -54,7 +54,7 @@ defmodule TodoClient.Local.Todo do
 
   sqlite do
     table "local_todos"
-    repo(TodoClient.Repo)
+    repo TodoClient.Repo
   end
 
   actions do
@@ -67,16 +67,20 @@ defmodule TodoClient.Local.Todo do
     # remote, producing a phantom conflict.
     create :create do
       primary? true
-      accept [:id, :title, :completed, :public, :priority, :due_date, :version]
+      accept [:id, :title, :completed, :public, :priority, :due_date, :list_id, :version]
       change TodoClient.BumpVersion
     end
 
     update :update do
       primary? true
       require_atomic? false
-      accept [:title, :completed, :public, :priority, :due_date, :version]
+      accept [:title, :completed, :public, :priority, :due_date, :list_id, :version]
       change TodoClient.BumpVersion
     end
+  end
+
+  validations do
+    validate string_length(:title, min: 3)
   end
 
   attributes do
@@ -96,6 +100,7 @@ defmodule TodoClient.Local.Todo do
     attribute :public, :boolean, public?: true, default: false
     attribute :priority, TodoClient.Remote.Priority, public?: true, default: :medium
     attribute :due_date, :date, public?: true
+    attribute :list_id, :uuid, public?: true
     # Server-assigned, hydration-only — writable?: false so a LocalOutbox
     # flush's replicated write never sends it as wire input (the remote
     # rejects it: "is currently writable?: false"). Hydration still writes

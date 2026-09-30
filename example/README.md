@@ -21,7 +21,7 @@ example/
                  Generated TodoClient.Remote.{Todo,TodoList} resources are
                  wrapped in AshMultiDatalayer.DataLayer (an ETS cache in front
                  of AshRemote.DataLayer) AND subscribed to realtime
-                 notifications. AshRemote.MultiDatalayer.ChangeNotifier +
+                 notifications. TodoClient.RemoteChangeNotifier +
                  AshRemote.MultiDatalayer.LifecycleGuard keep that cache correct
                  across clients. A second, LocalOutbox-backed resource stack
                  (TodoClient.Local.*) powers the offline-first /offline page.
@@ -35,7 +35,7 @@ todo_server ──/manifest.json──►  mix ash_remote.gen  ──►  TodoCl
      ▲   ▲                                                     │  (wrapped in AshMultiDatalayer.DataLayer)
      │   └── ws /ash_remote/socket ◄── AshRemote.Realtime ◄─────┤        │
      │                                       │                  │        │
-     │                     AshRemote.MultiDatalayer.ChangeNotifier       │
+     │                     TodoClient.RemoteChangeNotifier               │
      │                     AshRemote.MultiDatalayer.LifecycleGuard        │
      └────────── /rpc/run (Bearer JWT) ◄── AshRemote.DataLayer ◄── AshMultiDatalayer ◄── TodoClient.Live
 ```
@@ -52,13 +52,14 @@ _own_ write path invalidates that cache. Nothing there reacts when a _different_
 client's write arrives as a realtime notification. Two `ash_remote` utilities
 close that gap (see their moduledocs for the full detail):
 
-- **`AshRemote.MultiDatalayer.ChangeNotifier`** — an `Ash.Notifier`, listed
-  FIRST in each generated resource's `notifiers:` (a literal list — see
-  `AshRemote.MultiDatalayer`'s moduledoc for why it can't be built via a helper
-  call). On every realtime-replicated change it routes the notification through
+- **`TodoClient.RemoteChangeNotifier`** — listed first in each online resource's
+  `notifiers:`. For peer changes it delegates to
+  `AshRemote.MultiDatalayer.ChangeNotifier`, which routes the notification through
   the resource's `ash_multi_datalayer` orchestrator's `handle_external_change/2`
   — for these ProvenCoverage resources, that drops the coverage entries the row
   matches and physically evicts the row, so the next read is a genuine miss.
+  It skips the originating client's own websocket echo because that write
+  already updated its online cache; the offline mirror still receives the echo.
 - **`AshRemote.MultiDatalayer.LifecycleGuard`** — a GenServer registered via
   `AshRemote.Realtime.listen_lifecycle/1`. Notifications are at-most-once, so a
   websocket disconnect can lose writes with nothing for the notifier above to
@@ -99,16 +100,20 @@ Open both pages (Ada + Grace). Each client instance serves two demos:
 4. Kill `todo_server` briefly, make a change on Ada's side, then reconnect. The
    moment Grace's socket rejoins, her dashboard shows a full-ledger invalidation
    for that resource (not silently stale data), then fresh misses/backfills.
-5. Add a **public** list/todo on either page → it appears live on both.
+5. Create a public or private list, then choose a list and the todo's visibility
+   in the shared form. Public rows appear on both users' pages; private rows
+   stay scoped to their creator. Notices have a × button so a stale conflict
+   message can be dismissed after reading it.
 
-**`/offline` — the LocalOutbox demo:** toggle offline, edit local-first while
-queued in the outbox, then go back online and resolve a server-reported conflict
-with the three-way (Keep mine / Take theirs / Retry) UI. The `/oban` page shows
-the outbox flush jobs draining.
+**`/offline` — the LocalOutbox demo:** create lists and todos with the same
+forms while online or offline. Both resources write to local SQLite and queue
+their server writes in the outbox. Toggle offline, edit locally, then go back
+online and resolve a server-reported conflict with the three-way (Keep mine /
+Take theirs / Retry) UI. The `/oban` page shows the outbox flush jobs draining.
 
 **`/ledger` — the ProvenCoverage ledger:** open this page alongside `/` to see
 each client's current Todo and TodoList coverage filters, loaded fields, and
-normalised intervals. It refreshes every two seconds and reads the local ledger
+normalised intervals. It refreshes on cache telemetry and reads the local ledger
 without issuing an RPC or warming the cache. Each client instance has its own
 ledger, so compare the two pages as you browse or change shared todos. The
 offline `LocalOutbox` stack has no coverage ledger: its local SQLite layer is
@@ -135,7 +140,12 @@ cd ../todo_client && mix remote.gen      # ash_remote.gen → lib/todo_client/re
 hand-edits must be re-applied afterward (each file says so in a comment): swap
 `data_layer:` for `AshMultiDatalayer.DataLayer` + add the
 `multi_data_layer do ... end` block, and put
-`AshRemote.MultiDatalayer.ChangeNotifier` first in `notifiers:`.
+`TodoClient.RemoteChangeNotifier` first in `notifiers:`.
 `realtime?(true)` survives regeneration on its own — the manifest advertises it
 because the server's domain configures `pub_sub`, so the generator sets it
 automatically.
+
+The offline `TodoClient.Local.TodoList` was generated with `ash_remote.gen`
+from a temporary TodoList-only subset of the published manifest, then adapted
+for LocalOutbox and SQLite. Filtering the manifest avoids merging the online
+Todo definition into the existing offline Todo resource.

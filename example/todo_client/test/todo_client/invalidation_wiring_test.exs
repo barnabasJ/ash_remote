@@ -43,8 +43,8 @@ defmodule TodoClient.InvalidationWiringTest do
   end
 
   test "the change notifier is listed first on both remote resources" do
-    assert AshRemote.MultiDatalayer.ordered?(Todo)
-    assert AshRemote.MultiDatalayer.ordered?(TodoList)
+    assert hd(Ash.Resource.Info.notifiers(Todo)) == TodoClient.RemoteChangeNotifier
+    assert hd(Ash.Resource.Info.notifiers(TodoList)) == TodoClient.RemoteChangeNotifier
   end
 
   defp warm(query) do
@@ -59,12 +59,9 @@ defmodule TodoClient.InvalidationWiringTest do
     {entry_id, result}
   end
 
-  # ProvenCoverage's inbound reaction is deliberately conservative (see
-  # `AshRemote.MultiDatalayer.ChangeNotifierTest` and MDL's own
-  # `ProvenCoverage.handle_external_change/2` comment): with no local
-  # before-image, every entry predicated on a non-PK field is dropped, and only
-  # a point query on a *different* PK is guaranteed to survive.
-  test "a fabricated remote update notification drops the coverage the changed row matches", %{
+  # With no reliable before-image, the notifier excludes the changed PK from
+  # every potentially affected filter until that row is read again.
+  test "a fabricated remote update notification narrows the affected coverage", %{
     list: list,
     other_list: other_list
   } do
@@ -78,16 +75,21 @@ defmodule TodoClient.InvalidationWiringTest do
 
     # This client never wrote `here` locally — it's cached purely from the
     # read above. The change notifier routes the notification through the
-    # resource's ProvenCoverage orchestrator, which drops the coverage the row
-    # matches and physically evicts it.
+    # resource's ProvenCoverage orchestrator, which excludes the changed ID
+    # from the existing coverage and physically evicts its old cached row.
     updated = %{here | completed: true}
     notification = build_notification(Todo, :update, updated)
 
-    assert :ok = AshRemote.MultiDatalayer.ChangeNotifier.notify(notification)
+    own_echo = %{notification | metadata: %{"ash_remote" => %{own_echo?: true}}}
+    assert :ok = TodoClient.RemoteChangeNotifier.notify(own_echo)
+    assert list_entry_id in MapSet.new(Coverage.entries(Todo, nil), & &1.id)
 
-    remaining = Coverage.entries(Todo, nil) |> MapSet.new(& &1.id)
-    refute list_entry_id in remaining
-    assert there_pk_entry_id in remaining
+    assert :ok = TodoClient.RemoteChangeNotifier.notify(notification)
+
+    remaining = Coverage.entries(Todo, nil)
+    assert MapSet.new(remaining, & &1.id) == MapSet.new([list_entry_id, there_pk_entry_id])
+    assert Enum.find(remaining, &(&1.id == list_entry_id)).excluded_ids == [here.id]
+    assert Enum.find(remaining, &(&1.id == there_pk_entry_id)).excluded_ids == []
   end
 
   test "LifecycleGuard drops the full ledger on a fabricated :resubscribed event",

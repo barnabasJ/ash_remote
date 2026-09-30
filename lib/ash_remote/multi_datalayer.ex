@@ -17,8 +17,8 @@ defmodule AshRemote.MultiDatalayer do
 
     * `AshRemote.MultiDatalayer.ChangeNotifier` — an `Ash.Notifier` that turns
       each per-record realtime notification into the strategy's
-      `handle_external_change/2` reaction (ProvenCoverage invalidates the covered
-      rows; LocalOutbox refreshes the row into the local authority).
+      `handle_external_change/2` reaction (ProvenCoverage excludes the changed
+      row from covered filters; LocalOutbox refreshes it into local authority).
     * `AshRemote.MultiDatalayer.LifecycleGuard` — a `GenServer` that turns a
       realtime *gap* (`:resubscribed`/`:join_denied`, where at-most-once delivery
       means writes may have been missed) into the strategy's

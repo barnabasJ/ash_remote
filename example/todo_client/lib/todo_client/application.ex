@@ -60,8 +60,9 @@ defmodule TodoClient.Application do
       {Task,
        fn ->
          try do
-           TodoClient.Local.Todo
-           |> AshMultiDatalayer.Orchestrator.LocalOutbox.hydrate()
+           for resource <- [TodoClient.Local.TodoList, TodoClient.Local.Todo] do
+             AshMultiDatalayer.Orchestrator.LocalOutbox.hydrate(resource)
+           end
          rescue
            _ -> :ok
          catch

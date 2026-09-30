@@ -29,7 +29,9 @@ defmodule TodoClient.Network do
       # reconcile missed remote changes into clean rows and keep dirty rows for
       # the outbox's conflict handling. This choice belongs to the demo app.
       if Process.whereis(TodoClient.Repo) do
-        AshRemote.MultiDatalayer.LifecycleGuard.reconcile_gap(TodoClient.Local.Todo)
+        for resource <- [TodoClient.Local.TodoList, TodoClient.Local.Todo] do
+          AshRemote.MultiDatalayer.LifecycleGuard.reconcile_gap(resource)
+        end
       end
     end
 

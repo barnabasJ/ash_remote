@@ -6,11 +6,9 @@ defmodule TodoClient.RealtimeBridge do
   Because the server already filtered per-record, a change only arrives here if
   the connected user was allowed to see it.
 
-  Listed after `AshRemote.MultiDatalayer.ChangeNotifier` (see that module and
-  `AshRemote.MultiDatalayer` for the ordering rule) so the coverage ledger is
-  already invalidated by the time this bridge tells a LiveView to refetch — the
-  refetch is a genuine (and, for the affected rows, singular) miss, never a stale
-  cache hit.
+  Listed after `TodoClient.RemoteChangeNotifier` so peer changes invalidate
+  coverage before this bridge tells a LiveView to refetch. The online mirror
+  ignores its own websocket echo; the LocalOutbox mirror still receives it.
   """
   use Ash.Notifier
 
@@ -20,12 +18,17 @@ defmodule TodoClient.RealtimeBridge do
 
   @impl true
   def notify(notification) do
-    Phoenix.PubSub.broadcast(
-      TodoClient.PubSub,
-      @topic,
-      {:remote_change, notification.resource, notification.action.type,
-       notification.data && Map.get(notification.data, :id)}
-    )
+    own_echo? = get_in(notification.metadata || %{}, ["ash_remote", :own_echo?])
+
+    unless own_echo? == true and
+             notification.resource in [TodoClient.Remote.Todo, TodoClient.Remote.TodoList] do
+      Phoenix.PubSub.broadcast(
+        TodoClient.PubSub,
+        @topic,
+        {:remote_change, notification.resource, notification.action.type,
+         notification.data && Map.get(notification.data, :id), notification.data}
+      )
+    end
 
     :ok
   end

@@ -66,6 +66,7 @@ defmodule AshRemote.RealtimeEchoTest do
 
     assert Enum.any?(notifications, &remote_origin?/1), "expected a remote-origin copy"
     assert Enum.any?(notifications, &(not remote_origin?(&1))), "expected a local copy"
+    assert Enum.any?(notifications, &(&1.metadata["ash_remote"][:own_echo?] == true))
   end
 
   defp receive_notification do

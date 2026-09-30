@@ -119,7 +119,21 @@
     {
       "action": {
         "get": false,
-        "inputs": [],
+        "inputs": [
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "expected_version",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "integer",
+              "module": "Ash.Type.Integer",
+              "name": "Integer"
+            }
+          }
+        ],
         "metadata": [],
         "name": "destroy",
         "primary": true,
@@ -245,6 +259,19 @@
               "module": "Ash.Type.Integer",
               "name": "Integer"
             }
+          },
+          {
+            "allow_nil": true,
+            "has_default": false,
+            "name": "expected_version",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "integer",
+              "module": "Ash.Type.Integer",
+              "name": "Integer"
+            }
           }
         ],
         "metadata": [],
@@ -258,6 +285,19 @@
       "action": {
         "get": false,
         "inputs": [
+          {
+            "allow_nil": false,
+            "has_default": true,
+            "name": "id",
+            "required": false,
+            "sensitive": false,
+            "type": {
+              "allow_nil": null,
+              "kind": "uuid",
+              "module": "Ash.Type.UUID",
+              "name": "UUID"
+            }
+          },
           {
             "allow_nil": false,
             "has_default": false,
@@ -3601,7 +3641,7 @@
             "module": "Ash.Type.UUID",
             "name": "UUID"
           },
-          "writable": false
+          "writable": true
         },
         "inserted_at": {
           "allow_nil": false,

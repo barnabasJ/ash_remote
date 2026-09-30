@@ -67,6 +67,32 @@ defmodule TodoClient.Repo.Migrations do
     def down, do: Oban.Migrations.down()
   end
 
+  defmodule Lists do
+    @moduledoc false
+    use Ecto.Migration
+
+    def up do
+      create_if_not_exists table("local_todo_lists", primary_key: false) do
+        add(:id, :uuid, primary_key: true)
+        add(:name, :text, null: false)
+        add(:public, :boolean, default: false)
+        add(:inserted_at, :utc_datetime_usec)
+      end
+
+      alter table("local_todos") do
+        add(:list_id, :uuid)
+      end
+    end
+
+    def down do
+      alter table("local_todos") do
+        remove(:list_id)
+      end
+
+      drop(table("local_todo_lists"))
+    end
+  end
+
   @doc """
   Bring every schema up against the already-started `TodoClient.Repo`. Idempotent
   (`Ecto.Migrator.up` no-ops an applied version). The SQLite file is created when
@@ -76,6 +102,7 @@ defmodule TodoClient.Repo.Migrations do
     repo = TodoClient.Repo
     Ecto.Migrator.up(repo, 1, Tables, log: false)
     Ecto.Migrator.up(repo, 2, ObanJobs, log: false)
+    Ecto.Migrator.up(repo, 3, Lists, log: false)
     :ok
   end
 

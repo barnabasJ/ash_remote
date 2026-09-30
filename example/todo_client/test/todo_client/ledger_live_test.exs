@@ -5,6 +5,8 @@ defmodule TodoClient.LedgerLiveTest do
     socket = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}}}
     {:ok, socket} = TodoClient.LedgerLive.mount(%{}, %{}, socket)
     assert socket.assigns.total == 0
+    Phoenix.PubSub.subscribe(TodoClient.PubSub, TodoClient.CacheStats.topic())
+    expected_backfills = TodoClient.CacheStats.stats().backfills + 1
 
     server_create_todo!(%{title: "Visible todo", list_id: list.id})
 
@@ -16,8 +18,9 @@ defmodule TodoClient.LedgerLiveTest do
     |> Ash.Query.filter(list_id == ^list.id)
     |> Ash.read!(actor: TodoClient.Session.actor())
 
+    assert_receive {:cache_stats, %{backfills: ^expected_backfills}}, 1_000
+    {:noreply, socket} = TodoClient.LedgerLive.handle_info({:cache_stats, %{}}, socket)
     rpc_count = CountingRouter.rpc_count()
-    {:noreply, socket} = TodoClient.LedgerLive.handle_event("refresh", %{}, socket)
 
     assert socket.assigns.total >= 1
 
@@ -53,5 +56,29 @@ defmodule TodoClient.LedgerLiveTest do
     assert html |> IO.iodata_to_binary() |> String.contains?("From server: Visible todo")
 
     assert CountingRouter.rpc_count() == rpc_count
+  end
+
+  test "keeps one entry and shows the excluded ID until it is read", %{list: list} do
+    todo = server_create_todo!(%{title: "One", list_id: list.id})
+
+    query = Ash.Query.filter(Todo, list_id == ^list.id)
+    assert [_] = Ash.read!(query, actor: TodoClient.Session.actor())
+
+    AshMultiDatalayer.forget!(Todo, %{id: todo.id})
+
+    socket = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}}}
+    {:ok, socket} = TodoClient.LedgerLive.mount(%{}, %{}, socket)
+    entries = Enum.find(socket.assigns.resources, &(&1.label == "Todos")).entries
+
+    assert length(entries) == 1
+    assert hd(entries).filter =~ "list_id"
+    assert hd(entries).filter =~ "id !="
+    assert hd(entries).filter =~ todo.id
+
+    assert [_] = Ash.read!(query, actor: TodoClient.Session.actor())
+    {:noreply, socket} = TodoClient.LedgerLive.handle_event("refresh", %{}, socket)
+    entries = Enum.find(socket.assigns.resources, &(&1.label == "Todos")).entries
+    assert length(entries) == 1
+    refute hd(entries).filter =~ "id !="
   end
 end

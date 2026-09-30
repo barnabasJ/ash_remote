@@ -10,9 +10,9 @@ defmodule AshRemote.MultiDatalayer.ChangeNotifier do
   `AshMultiDatalayer.DataLayer.Info.orchestrator/1` — to its
   `handle_external_change/2`:
 
-    * **ProvenCoverage** invalidates the covered rows (drops the matching
-      coverage-ledger entries and physically evicts the row), so the next read is
-      a genuine miss that refetches the fresh value.
+    * **ProvenCoverage** excludes the changed ID from potentially affected
+      coverage filters and physically evicts its old row, so the next read
+      fetches only the uncovered ID and restores the filter's coverage.
     * **LocalOutbox** refreshes that row into the local authority (skipping a PK
       with unflushed local edits — the dirty-chain rule), so an online replica
       converges without a poll.

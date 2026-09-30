@@ -21,9 +21,11 @@ defmodule TodoClient.OfflineLive do
   queued edits are skipped), so the two pages track each other live.
   """
   use Phoenix.LiveView
+  import TodoClient.Components
 
   alias AshMultiDatalayer.Orchestrator.LocalOutbox
   alias TodoClient.Local.Todo
+  alias TodoClient.Local.TodoList
 
   # `version` is the conflict field (client-authored, see TodoClient.BumpVersion);
   # showing it in the three-way diff makes the conflict cause legible.
@@ -47,16 +49,27 @@ defmodule TodoClient.OfflineLive do
 
     {:ok,
      socket
-     |> assign(user: TodoClient.Session.user(), title: "", public: true, fields: @fields)
+     |> assign(user: TodoClient.Session.user(), todo_params: %{}, fields: @fields)
      |> load()}
   end
 
   # A peer's server-side change arrived over the realtime socket; ExternalChange
   # already refreshed local, so just re-read and re-render (push, not poll).
   @impl true
-  def handle_info({:remote_change, _resource, _type, _id}, socket) do
+  def handle_info({:remote_change, resource, _type, _id}, socket)
+      when resource in [Todo, TodoList] do
     {:noreply, load(socket)}
   end
+
+  def handle_info({:remote_change, resource, _type, _id, _record}, socket)
+      when resource in [Todo, TodoList] do
+    {:noreply, load(socket)}
+  end
+
+  def handle_info({:remote_change, _resource, _type, _id}, socket), do: {:noreply, socket}
+
+  def handle_info({:remote_change, _resource, _type, _id, _record}, socket),
+    do: {:noreply, socket}
 
   # This client's own outbox committed a state change — refresh the sync badges.
   def handle_info(:outbox_changed, socket) do
@@ -74,19 +87,46 @@ defmodule TodoClient.OfflineLive do
   end
 
   @impl true
-  def handle_event("add", %{"title" => title} = params, socket) do
-    title = String.trim(title)
+  def handle_event("validate", %{"todo" => params}, socket) do
+    {:noreply, assign(socket, todo_params: params)}
+  end
 
-    if title != "" do
-      Todo
-      |> Ash.Changeset.for_create(:create, %{
-        title: title,
-        public: params["public"] == "true"
-      })
-      |> Ash.create!()
+  def handle_event("save", %{"todo" => params}, socket) do
+    attrs = %{
+      title: String.trim(params["title"] || ""),
+      public: params["public"] == "true",
+      list_id: blank_to_nil(params["list_id"])
+    }
+
+    result = Todo |> Ash.Changeset.for_create(:create, attrs) |> Ash.create()
+
+    case result do
+      {:ok, _todo} ->
+        {:noreply, socket |> clear_flash(:error) |> assign(todo_params: %{}) |> load()}
+
+      {:error, _error} ->
+        {:noreply,
+         socket
+         |> assign(todo_params: params)
+         |> put_flash(:error, "Could not create that todo. Check its title and try again.")}
     end
+  end
 
-    {:noreply, socket |> assign(title: "") |> load()}
+  def handle_event("add_list", params, socket) do
+    attrs = %{name: String.trim(params["name"] || ""), public: params["public"] == "true"}
+
+    case TodoList |> Ash.Changeset.for_create(:create, attrs) |> Ash.create() do
+      {:ok, _list} ->
+        {:noreply, socket |> clear_flash(:error) |> load()}
+
+      {:error, _error} ->
+        {:noreply,
+         put_flash(socket, :error, "Could not create that list. Check its name and try again.")}
+    end
+  end
+
+  def handle_event("dismiss-flash", %{"kind" => kind}, socket) when kind in ["info", "error"] do
+    {:noreply, clear_flash(socket, String.to_existing_atom(kind))}
   end
 
   def handle_event("toggle", %{"id" => id}, socket) do
@@ -94,16 +134,6 @@ defmodule TodoClient.OfflineLive do
 
     todo
     |> Ash.Changeset.for_update(:update, %{completed: not todo.completed})
-    |> Ash.update!()
-
-    {:noreply, load(socket)}
-  end
-
-  def handle_event("toggle-public", %{"id" => id}, socket) do
-    todo = Ash.get!(Todo, id)
-
-    todo
-    |> Ash.Changeset.for_update(:update, %{public: not todo.public})
     |> Ash.update!()
 
     {:noreply, load(socket)}
@@ -173,11 +203,23 @@ defmodule TodoClient.OfflineLive do
 
   defp load(socket) do
     todos = Todo |> Ash.Query.sort(:title) |> Ash.read!()
-    pending = LocalOutbox.pending(Todo)
-    parked = LocalOutbox.parked(Todo)
+    lists = TodoList |> Ash.Query.sort(:name) |> Ash.read!()
+    pending = Enum.flat_map([TodoList, Todo], &LocalOutbox.pending/1)
+    parked = Enum.flat_map([TodoList, Todo], &LocalOutbox.parked/1)
+
+    lists =
+      Enum.map(lists, fn list ->
+        list_todos = Enum.filter(todos, &(&1.list_id == list.id))
+
+        list
+        |> Map.put(:todos, list_todos)
+        |> Map.put(:todo_count, length(list_todos))
+        |> Map.put(:completed_count, Enum.count(list_todos, & &1.completed))
+      end)
 
     assign(socket,
       todos: todos,
+      lists: lists,
       pending: pending,
       parked: parked,
       conflicts: Enum.filter(parked, &(&1.error_class == :conflict)),
@@ -187,19 +229,23 @@ defmodule TodoClient.OfflineLive do
   end
 
   defp safe_refresh do
-    LocalOutbox.refresh(Todo, :all)
+    for resource <- [TodoList, Todo], do: LocalOutbox.refresh(resource, :all)
   rescue
     _ -> :ok
   catch
     _, _ -> :ok
   end
 
+  defp blank_to_nil(nil), do: nil
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
+
   # --- render ------------------------------------------------------------
 
   @impl true
   def render(assigns) do
     ~H"""
-    <div style="max-width: 46rem; margin: 0 auto 3rem; font-family: system-ui, sans-serif;">
+    <div class="demo-page">
       <header style="display:flex; align-items:baseline; gap:.75rem; margin:1.5rem .5rem;">
         <h1 style="margin:0;">Offline Todos</h1>
         <small style="color:#888;">
@@ -279,59 +325,39 @@ defmodule TodoClient.OfflineLive do
         </div>
       </div>
 
-      <form phx-submit="add" style="display:flex; gap:.5rem; margin:0 .5rem 1.5rem;">
-        <input name="title" value={@title} placeholder="New todo…" style="flex:1; padding:.45rem;" />
-        <label style="display:flex; align-items:center; gap:.25rem; font-size:.85rem;">
-          <input type="checkbox" name="public" value="true" checked={@public} /> public
-        </label>
-        <button style="padding:.45rem .9rem;">Add</button>
-      </form>
+      <.notices flash={@flash} />
 
-      <ul style="list-style:none; padding:0; margin:0 .5rem;">
-        <li :for={todo <- @todos} style="display:flex; align-items:center; gap:.5rem; padding:.45rem 0; border-bottom:1px solid #eee;">
-          <input type="checkbox" checked={todo.completed} phx-click="toggle" phx-value-id={todo.id} />
-          <form phx-submit="rename" style="flex:1; display:flex; gap:.4rem;">
-            <input type="hidden" name="todo_id" value={todo.id} />
-            <input
-              name="title"
-              value={todo.title}
-              id={"title-#{todo.id}-#{:erlang.phash2(todo.title)}"}
-              style={"flex:1; padding:.3rem; border:1px solid #eee; " <>
-                if(todo.completed, do: "color:#999; text-decoration:line-through;", else: "")}
-            />
-          </form>
-          <button
-            phx-click="toggle-public"
-            phx-value-id={todo.id}
-            title={if todo.public, do: "Public — replicates to every client. Click to make private.", else: "Private — owner-only, never leaves this client. Click to make public."}
-            style={"border:1px solid #ddd; border-radius:.5rem; padding:.1rem .45rem; cursor:pointer; font-size:.7rem; white-space:nowrap; " <>
-              if(todo.public, do: "background:#e7f0ff; color:#1a56c4;", else: "background:#f2f2f2; color:#777;")}
-          >
-            {if todo.public, do: "🌐 public", else: "🔒 private"}
-          </button>
-          <span style="font-size:.7rem;">{status_badge(Map.get(@status_by_id, todo.id))}</span>
-          <button phx-click="delete" phx-value-id={todo.id} style="border:0; background:none; cursor:pointer; color:#c00;">✕</button>
-        </li>
-      </ul>
-      <p :if={@todos == []} style="color:#888; margin:1rem .5rem;">no todos yet — add one, or refresh from the server</p>
+      <section class="panel">
+        <h2>Create a list</h2>
+        <.list_form />
+      </section>
+
+      <section class="panel">
+        <h2>Add a todo</h2>
+        <.todo_form
+          lists={@lists}
+          title={Map.get(@todo_params, "title", "")}
+          list_id={Map.get(@todo_params, "list_id")}
+          public={Map.get(@todo_params, "public") == "true"}
+          allow_unlisted={true}
+        />
+      </section>
+
+      <.list_section :for={list <- @lists} list={list}>
+        <.todo_row :for={todo <- list.todos} todo={todo} offline={true} status={Map.get(@status_by_id, todo.id)} />
+        <p :if={list.todos == []} class="empty-state">No todos in this list yet.</p>
+      </.list_section>
+
+      <section :if={Enum.any?(@todos, &is_nil(&1.list_id))} class="panel">
+        <h2>Unlisted todos</h2>
+        <.todo_row :for={todo <- @todos} :if={is_nil(todo.list_id)} todo={todo} offline={true} status={Map.get(@status_by_id, todo.id)} />
+      </section>
+      <p :if={@todos == [] and @lists == []} class="empty-state">Create a list or add your first todo.</p>
     </div>
     """
   end
 
   # --- view helpers ------------------------------------------------------
-
-  defp status_badge(:synced), do: badge("synced", "#2e7d32", "#e6f7e6")
-  defp status_badge(:pending), do: badge("pending", "#8a6d00", "#fff6d6")
-  defp status_badge({:parked, _}), do: badge("parked", "#c62828", "#fbeaea")
-  defp status_badge(_), do: ""
-
-  defp badge(text, color, bg) do
-    assigns = %{text: text, color: color, bg: bg}
-
-    ~H"""
-    <span style={"background:#{@bg}; color:#{@color}; padding:.1rem .45rem; border-radius:.5rem;"}>{@text}</span>
-    """
-  end
 
   defp synced_count(status_by_id),
     do: status_by_id |> Map.values() |> Enum.count(&(&1 == :synced))

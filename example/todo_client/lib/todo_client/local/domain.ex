@@ -9,5 +9,6 @@ defmodule TodoClient.Local do
 
   resources do
     resource TodoClient.Local.Todo
+    resource TodoClient.Local.TodoList
   end
 end

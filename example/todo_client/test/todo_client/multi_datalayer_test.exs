@@ -215,8 +215,8 @@ defmodule TodoClient.MultiDatalayerTest do
         server_create_todo!(%{title: "Live", list_id: list.id})
         assert length(Ash.read!(query, actor: actor())) == 2
 
-        # A write while disabled still invalidates coverage: no pre-switch
-        # entries may survive to serve stale hits after re-enable.
+        # Disabling clears coverage, so writes made while the cache is
+        # bypassed cannot leave a stale proof for re-enable.
         todo = query |> Ash.read!(actor: actor()) |> Enum.find(&(&1.title == "Steady"))
 
         todo

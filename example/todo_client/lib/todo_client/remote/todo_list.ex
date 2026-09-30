@@ -9,7 +9,7 @@ defmodule TodoClient.Remote.TodoList do
     domain: TodoClient.Remote.Domain,
     data_layer: AshMultiDatalayer.DataLayer,
     extensions: [AshRemote.DataLayer],
-    notifiers: [AshRemote.MultiDatalayer.ChangeNotifier, TodoClient.RealtimeBridge],
+    notifiers: [TodoClient.RemoteChangeNotifier, TodoClient.RealtimeBridge],
     # Mirrored from the manifest, not hand-authored: the primary read carries
     # the server's validations, which Ash's primary-read verifier flags as a
     # likely mistake. `mix ash_remote.gen` emits this on every resource now.

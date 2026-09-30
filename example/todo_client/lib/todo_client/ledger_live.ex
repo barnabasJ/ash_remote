@@ -11,6 +11,7 @@ defmodule TodoClient.LedgerLive do
     {"Todos", TodoClient.Remote.Todo},
     {"Todo lists", TodoClient.Remote.TodoList}
   ]
+
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
@@ -66,8 +67,9 @@ defmodule TodoClient.LedgerLive do
 
       <p style="line-height:1.5; color:#526173;">
         An entry means that the full result of its filter, with the listed fields, is in this
-        client's cache. A narrower read can use that coverage. Writes and realtime changes
-        remove affected entries; restarting this client clears them.
+        client's cache. A narrower read can use that coverage. A row change narrows the
+        affected filter around that ID; the next successful read fills the hole in the
+        same entry. Restarting this client clears the ledger.
       </p>
 
       <section style="margin:2rem 0;">
@@ -83,7 +85,7 @@ defmodule TodoClient.LedgerLive do
         <div style="display:flex; gap:.7rem; flex-wrap:wrap; margin:1rem 0;">
           <div style="padding:.7rem 1rem; border-radius:.5rem; background:#e8f5ee;"><strong>{@stats.hits}</strong> cache hits</div>
           <div style="padding:.7rem 1rem; border-radius:.5rem; background:#e8f0fc;"><strong>{@stats.partials}</strong> filter splits</div>
-          <div style="padding:.7rem 1rem; border-radius:.5rem; background:#fff2e7;"><strong>{@stats.misses}</strong> remote reads</div>
+          <div style="padding:.7rem 1rem; border-radius:.5rem; background:#fff2e7;"><strong>{@stats.misses}</strong> full remote reads</div>
           <div style="padding:.7rem 1rem; border-radius:.5rem; background:#f3f5f7;"><strong>{@stats.backfills}</strong> backfills</div>
           <div style="padding:.7rem 1rem; border-radius:.5rem; background:#f3f5f7;"><strong>{@stats.invalidations}</strong> invalidations</div>
         </div>
